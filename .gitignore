@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / Config dengan credentials
+inject_dana_config.json
+inject_dana_session
+inject_dana_session.session
+*.session
+
+# Logs
+logs/
+*.log
+log_*.txt
+
+# Screenshots
+screenshots/
+
+# Temp files
+*.tmp
+*.bak
+
+# PyInstaller
+*.spec
+
+# Success tracking
+inject_success.json
+inject_dana_pending.json
+inject_dana_claimed.json
+
+# Avatar
+tg_avatar.jpg

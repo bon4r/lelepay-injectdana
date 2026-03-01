@@ -1,0 +1,23 @@
+# INJECT DANA v3.0 Requirements
+# Python 3.14+ (bundled in installer)
+
+# ===== GUI =====
+PySide6>=6.10.0
+
+# ===== Telegram (user session) =====
+telethon>=1.42.0
+
+# ===== Android Control =====
+uiautomator2>=3.5.0
+
+# ===== QR Code Login =====
+qrcode[pil]>=8.0
+
+# ===== Image Processing =====
+Pillow>=12.0.0
+
+# ===== HTTP =====
+requests>=2.32.0
+
+# ===== Build .exe (optional, untuk developer) =====
+pyinstaller>=6.0.0
