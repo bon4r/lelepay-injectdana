@@ -1,0 +1,55 @@
+# Build output
+build/
+dist/
+Output/
+*.spec
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+*.log
+log_*.txt
+
+# Config files with credentials
+inject_dana_config.json
+inject_dana_config_installer.json
+inject_dana_pending.json
+inject_dana_claimed.json
+inject_success.json
+mpo_multi_config.json
+bank_config.json
+bank_config_allbank.json
+success_tickets.json
+pgtoto_api_log*.json
+
+# Installer dependencies (large)
+installer_deps/
+
+# Screenshots
+screenshots/
+guide_screenshots/
+
+# Temp files
+*.txt
+!requirements.txt
+!inject_dana_requirements.txt
+!INSTALL_README.md
+!INJECT_DANA_GUIDE.md
+!CARA_BUILD_INSTALLER.md
+!UPDATE_LOG.txt
+
+# Avatar/session files
+tg_avatar.jpg
+*.session
+*.session-journal
+
+# Virtual environment
+.venv/
+
+# IDE
+.vscode/
+.idea/

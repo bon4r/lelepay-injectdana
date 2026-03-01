@@ -1,0 +1,21 @@
+# PGTOTOEM Requirements
+# Python 3.10+ (Tested on Python 3.14.2)
+
+# ===== CORE DEPENDENCIES (WAJIB) =====
+requests>=2.32.0
+selenium>=4.40.0
+uiautomator2>=3.5.0
+psutil>=7.0.0
+
+# ===== OPTIONAL - untuk fitur tambahan =====
+# DrissionPage>=4.1.0        # Browser automation alternatif (disabled by default)
+# playwright>=1.58.0         # Browser automation alternatif (disabled by default)
+# openpyxl>=3.1.0            # Export ke Excel
+# pillow>=12.0.0             # Image processing
+
+# ===== AUTO INSTALLED (dependencies) =====
+# adbutils, certifi, charset-normalizer, idna, urllib3, websocket-client
+# lxml, cssselect, colorama, click, packaging, typing_extensions
+
+# Note: tkinter sudah termasuk dalam Python standar
+# Pastikan saat install Python, centang "tcl/tk and IDLE"
