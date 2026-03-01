@@ -121,7 +121,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.3"  # Current app version for update check
+APP_VERSION = "3.0.4"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -3638,7 +3638,7 @@ def _make_camera_icon(size=20) -> QIcon:
 class InjectDanaApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LELEPAY - INJECTION v3.0 - Fair Distribution")
+        self.setWindowTitle(f"LELEPAY - INJECTION v{APP_VERSION} - Fair Distribution")
         self.resize(1200, 800)
 
         # Set window icon - handle both frozen (EXE) and non-frozen (script) cases
@@ -3704,7 +3704,10 @@ class InjectDanaApp(QMainWindow):
         msg = QMessageBox(self)
         msg.setWindowTitle("Update Available")
         msg.setIcon(QMessageBox.Information)
-        msg.setText(f"Versi baru tersedia: v{version}\n\nVersi saat ini: v{current}")
+        # Remove 'v' prefix if exists to avoid double 'v'
+        ver_display = version.lstrip('v') if version.startswith('v') else version
+        cur_display = current.lstrip('v') if str(current).startswith('v') else current
+        msg.setText(f"Versi baru tersedia: v{ver_display}\n\nVersi saat ini: v{cur_display}")
         
         if body:
             # Truncate body if too long
@@ -3763,7 +3766,9 @@ class InjectDanaApp(QMainWindow):
         
         threading.Thread(target=do_download, daemon=True).start()
         
-        # Progress dialog will be updated via ui_q polling
+        # Store progress dialog for queue handler to update
+        self._update_progress_dlg = progress
+        progress.show()
 
     # ────────────────────────────────────────
     #  BUILD GUI
@@ -5095,14 +5100,21 @@ class InjectDanaApp(QMainWindow):
                 # ===== AUTO-UPDATE HANDLERS =====
                 elif cmd == "update_available":
                     update_info = msg[1]
-                    self._log(f"\U0001F514 Update tersedia: v{update_info.get('version', '?')}")
+                    ver = update_info.get('version', '?')
+                    ver = ver.lstrip('v') if ver.startswith('v') else ver
+                    self._log(f"\U0001F514 Update tersedia: v{ver}")
                     self._show_update_dialog(update_info)
 
                 elif cmd == "update_progress":
-                    # Progress update - handled by progress dialog
-                    pass
+                    pct = msg[1]
+                    if hasattr(self, '_update_progress_dlg') and self._update_progress_dlg:
+                        self._update_progress_dlg.setValue(pct)
 
                 elif cmd == "update_download_done":
+                    # Close progress dialog
+                    if hasattr(self, '_update_progress_dlg') and self._update_progress_dlg:
+                        self._update_progress_dlg.close()
+                        self._update_progress_dlg = None
                     result = msg[1]
                     if result.get("path"):
                         self._log(f"\u2705 Download selesai: {result['path']}")
