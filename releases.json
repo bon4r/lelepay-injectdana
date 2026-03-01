@@ -1,0 +1,8 @@
+{
+    "version": "3.0.4",
+    "body": "## What's Changed\n- Fix window title version\n- Fix double v prefix\n- Fix download progress stuck",
+    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.4",
+    "download_url": "http://178.128.87.151/releases/INJECT_DANA.exe",
+    "download_size": 68419503,
+    "asset_name": "INJECT_DANA.exe"
+}

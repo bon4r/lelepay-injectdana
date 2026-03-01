@@ -26,7 +26,12 @@ GITHUB_OWNER = "bon4r"
 GITHUB_REPO = "lelepay-injectdana"
 CURRENT_VERSION = "3.0"  # Akan diupdate dari app
 
-# GitHub API URLs
+# ===== Custom Server (Primary) =====
+# Upload releases.json dan INJECT_DANA.exe ke VPS
+VPS_BASE_URL = "http://178.128.87.151/releases"
+VPS_RELEASES_JSON = f"{VPS_BASE_URL}/releases.json"
+
+# GitHub API URLs (Fallback)
 GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 
 # ===== HTTP Request (tanpa request library) =====
@@ -83,11 +88,37 @@ def parse_version(version_str: str) -> Tuple[int, ...]:
     return tuple(int(p) for p in parts) if parts else (0,)
 
 
-def check_for_update(current_version: str) -> Optional[dict]:
-    """
-    Check GitHub releases for new version.
-    Returns dict with update info if available, None otherwise.
-    """
+def _check_vps_for_update(current_version: str) -> Optional[dict]:
+    """Check VPS server for updates (faster than GitHub)."""
+    try:
+        data = _http_get(VPS_RELEASES_JSON)
+        if not data:
+            return None
+        
+        latest_version = data.get("version", "")
+        
+        # Compare versions
+        current_tuple = parse_version(current_version)
+        latest_tuple = parse_version(latest_version)
+        
+        if latest_tuple > current_tuple:
+            return {
+                "version": latest_version,
+                "current": current_version,
+                "body": data.get("body", ""),
+                "html_url": data.get("html_url", ""),
+                "download_url": data.get("download_url"),
+                "download_size": data.get("download_size", 0),
+                "asset_name": data.get("asset_name", "INJECT_DANA.exe"),
+            }
+        return None
+    except Exception as e:
+        print(f"[Updater] VPS check error: {e}")
+        return None
+
+
+def _check_github_for_update(current_version: str) -> Optional[dict]:
+    """Check GitHub releases for new version (fallback)."""
     try:
         data = _http_get(GITHUB_API_RELEASES)
         if not data:
@@ -121,8 +152,28 @@ def check_for_update(current_version: str) -> Optional[dict]:
             }
         return None
     except Exception as e:
-        print(f"[Updater] Check error: {e}")
+        print(f"[Updater] GitHub check error: {e}")
         return None
+
+
+def check_for_update(current_version: str) -> Optional[dict]:
+    """
+    Check for new version. Tries VPS first (faster), falls back to GitHub.
+    Returns dict with update info if available, None otherwise.
+    """
+    # Try VPS first (faster download)
+    result = _check_vps_for_update(current_version)
+    if result:
+        print("[Updater] Update found on VPS server")
+        return result
+    
+    # Fallback to GitHub
+    result = _check_github_for_update(current_version)
+    if result:
+        print("[Updater] Update found on GitHub")
+        return result
+    
+    return None
 
 
 def download_update(update_info: dict, dest_folder: str = None, 
