@@ -11,7 +11,7 @@ v3.0: Fair distribution untuk multi-user
   - Bukan selalu PC tercepat yang menang
 v2.9: Force cancel untuk request stuck
   - Request Dispatched/In Progress bisa di-force cancel
-  - Klik ❌ pada request stuck → konfirmasi → Gagal (Force)
+  - Klik ? pada request stuck ? konfirmasi ? Gagal (Force)
   - Hapus disconnect HP dari tabel Bank (klik kanan)
 v2.8: Fix double transfer pada restart app
   - Bug: Saat app restart, pesan yang sama bisa di-proses 2x
@@ -20,17 +20,17 @@ v2.8: Fix double transfer pada restart app
   - _processed_msg_ids set mencegah msg yang sama diproses ulang
 v2.7: Big Amount threshold + Verifikasi nama
   - Request > 20 juta tidak di-auto proses (status "Big Amount")
-  - Klik manual tombol ▶ di GUI untuk proses Big Amount
+  - Klik manual tombol ? di GUI untuk proses Big Amount
   - Verifikasi nama penerima dari bank sebelum transfer
-  - Jika nama tidak cocok → ABORT, status "Gagal - Nama Salah"
+  - Jika nama tidak cocok ? ABORT, status "Gagal - Nama Salah"
 v2.6: Verifikasi nama penerima sebelum transfer
   - Scrape nama penerima dari bank setelah isi rekening
   - Bandingkan dengan nama di request Telegram
-  - Jika TIDAK COCOK → ABORT transfer, status "Gagal - Nama Salah"
+  - Jika TIDAK COCOK ? ABORT transfer, status "Gagal - Nama Salah"
   - Mencegah salah transfer ke rekening yang berbeda
 v2.5: Anti double-processing untuk 2 admin di PC berbeda
   - Verifikasi "Diproses oleh: @username" dari bot Telegram
-  - Cek username siapa yang klik PROSES → bukan kita = SKIP
+  - Cek username siapa yang klik PROSES ? bukan kita = SKIP
   - Shared claim file dengan file locking (untuk PC sama)
   - Post-click verification 3x retry dengan timeout 60s
   - Final guard sebelum transfer: cek ulang success + claimed file
@@ -100,6 +100,47 @@ except ImportError:
 # ===== uiautomator2 =====
 try:
     import uiautomator2 as u2
+    
+    # Monkey-patch with_package_resource for frozen EXE
+    # PyInstaller bundles assets in _MEIPASS but importlib.resources can't find them
+    if getattr(sys, 'frozen', False) and u2:
+        import uiautomator2.utils as _u2_utils
+        import contextlib
+        import pathlib
+        
+        _original_wpr = _u2_utils.with_package_resource
+        
+        @contextlib.contextmanager
+        def _patched_with_package_resource(filename):
+            """Check _MEIPASS first for bundled assets."""
+            meipass = getattr(sys, '_MEIPASS', None)
+            if meipass:
+                meipass_path = pathlib.Path(meipass) / "uiautomator2" / filename
+                if meipass_path.exists():
+                    yield meipass_path
+                    return
+                # Also check directly in _MEIPASS
+                direct_path = pathlib.Path(meipass) / filename
+                if direct_path.exists():
+                    yield direct_path
+                    return
+            # Fallback to original
+            with _original_wpr(filename) as f:
+                yield f
+        
+        _u2_utils.with_package_resource = _patched_with_package_resource
+        # Also patch in core and _input modules
+        try:
+            import uiautomator2.core as _u2_core
+            _u2_core.with_package_resource = _patched_with_package_resource
+        except Exception:
+            pass
+        try:
+            import uiautomator2._input as _u2_input
+            _u2_input.with_package_resource = _patched_with_package_resource
+        except Exception:
+            pass
+        
 except ImportError:
     u2 = None
 
@@ -121,7 +162,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.4"  # Current app version for update check
+APP_VERSION = "3.0.12"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -324,7 +365,7 @@ def _try_claim_file(rid: str, claimer_id: str) -> bool:
                 with open(CLAIMED_FILE, "w") as f:
                     json.dump({}, f)
             with open(CLAIMED_FILE, "r+") as f:
-                # Lock the file (exclusive, non-blocking → retry with blocking)
+                # Lock the file (exclusive, non-blocking ? retry with blocking)
                 try:
                     msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, max(1, os.path.getsize(CLAIMED_FILE)))
                 except OSError:
@@ -338,9 +379,9 @@ def _try_claim_file(rid: str, claimer_id: str) -> bool:
                     content = f.read().strip()
                     claimed = json.loads(content) if content else {}
                     if rid in claimed:
-                        # Already claimed — check if by us
+                        # Already claimed � check if by us
                         return claimed[rid] == claimer_id
-                    # Not claimed yet — claim it
+                    # Not claimed yet � claim it
                     claimed[rid] = claimer_id
                     f.seek(0)
                     f.truncate()
@@ -446,11 +487,11 @@ def parse_konfirmasi_message(text: str) -> Optional[dict]:
     Saldo Akhir: 5,655,768 (5.655.768)
     
     Format 2 (Siap Proses):
-    🖊 Suntikan siap diproses!
-    🏦 No Rek: 0092758751
-    👤 Nama: LAELA LESTARI
-    🏛 Bank: BCA
-    💰 Nominal: 15 JT
+    ?? Suntikan siap diproses!
+    ?? No Rek: 0092758751
+    ?? Nama: LAELA LESTARI
+    ?? Bank: BCA
+    ?? Nominal: 15 JT
     """
     if not text:
         return None
@@ -581,7 +622,7 @@ class MyBcaTransferWorker(threading.Thread):
         self.ui_q.put(("log", full))
         print(full)
 
-    # ── Step-timing helpers (from transfer.py) ──────────────────────
+    # -- Step-timing helpers (from transfer.py) ----------------------
     def _timer_reset(self):
         now = time.monotonic()
         self._t_start = now
@@ -668,7 +709,7 @@ class MyBcaTransferWorker(threading.Thread):
         except Exception as e1:
             self._log(f"ATX not responding ({e1}), auto-installing...")
         
-        # ATX belum ada → install
+        # ATX belum ada ? install
         self.ui_q.put(("update_bank", (self.device_id, "status", "Installing ATX...")))
         try:
             if not PYTHON_EXE:
@@ -1017,7 +1058,7 @@ class MyBcaTransferWorker(threading.Thread):
             for el in self.d(className="android.widget.TextView"):
                 try:
                     text = (el.get_text() or "").strip()
-                    if '●' in text or '•' in text:
+                    if '?' in text or '�' in text:
                         continue
                     if "Rekening" in text or "rekening" in text:
                         continue
@@ -1124,7 +1165,7 @@ class MyBcaTransferWorker(threading.Thread):
                     text = (el.get_text() or "").strip()
                     if not text:
                         continue
-                    if '●' in text or '•' in text or '***' in text:
+                    if '?' in text or '�' in text or '***' in text:
                         continue
                     if re.search(r'\d', text) and 'ekening' not in text:
                         candidates.append(text)
@@ -1147,7 +1188,7 @@ class MyBcaTransferWorker(threading.Thread):
                     cls = node.attrib.get('class', '')
                     if cls == 'android.widget.TextView':
                         continue
-                    if '●' in text or '•' in text:
+                    if '?' in text or '�' in text:
                         continue
                     val = self._try_parse_saldo_from_text(text)
                     if val > 0:
@@ -1227,7 +1268,7 @@ class MyBcaTransferWorker(threading.Thread):
         return self.current_saldo
 
     def _hide_keyboard(self):
-        """Sembunyikan keyboard — samain PGTOTOALLBANK."""
+        """Sembunyikan keyboard � samain PGTOTOALLBANK."""
         try:
             self._shell("input keyevent 4")
             time.sleep(0.2)
@@ -1235,9 +1276,9 @@ class MyBcaTransferWorker(threading.Thread):
             pass
 
     def _finalize_amount_entry(self):
-        """Finalisasi input nominal: tap Done ✓ di keypad + defocus — samain PGTOTOALLBANK."""
+        """Finalisasi input nominal: tap Done ? di keypad + defocus � samain PGTOTOALLBANK."""
         try:
-            self._shell("input tap 620 1500")  # Done ✓ keypad
+            self._shell("input tap 620 1500")  # Done ? keypad
             time.sleep(0.25)
             self._shell("input tap 360 120")   # defocus area
             time.sleep(0.25)
@@ -1245,7 +1286,7 @@ class MyBcaTransferWorker(threading.Thread):
             pass
 
     def _tap_lanjut_top(self) -> bool:
-        """Tap tombol Lanjut atas — 1 resourceId check + fallback tap."""
+        """Tap tombol Lanjut atas � 1 resourceId check + fallback tap."""
         try:
             el = self.d(resourceId="com.bca.mybca.omni.android:id/2131362714")
             if el.exists:
@@ -1256,7 +1297,7 @@ class MyBcaTransferWorker(threading.Thread):
         return True
 
     def _tap_lanjut_bottom(self) -> bool:
-        """Tap tombol Lanjut bawah — 1 resourceId check + fallback tap."""
+        """Tap tombol Lanjut bawah � 1 resourceId check + fallback tap."""
         try:
             btn = self.d(resourceId="com.bca.mybca.omni.android:id/2131362712")
             if btn.exists:
@@ -1274,7 +1315,7 @@ class MyBcaTransferWorker(threading.Thread):
         return True
 
     def _wait_pin_pad(self, timeout=12.0) -> bool:
-        """Tunggu sampai layar PIN transaksi muncul — samain PGTOTOALLBANK."""
+        """Tunggu sampai layar PIN transaksi muncul � samain PGTOTOALLBANK."""
         end = time.time() + timeout
         while time.time() < end:
             try:
@@ -1286,9 +1327,9 @@ class MyBcaTransferWorker(threading.Thread):
             time.sleep(0.25)
         return False
 
-    # ── Adaptive-wait helpers ───────────────────────────────────────
+    # -- Adaptive-wait helpers ---------------------------------------
     def _wait_submenu_after_transfer(self, timeout=4.0) -> bool:
-        """Poll sampai submenu Transfer muncul — lightweight .exists."""
+        """Poll sampai submenu Transfer muncul � lightweight .exists."""
         end = time.time() + timeout
         while time.time() < end:
             try:
@@ -1299,7 +1340,7 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _wait_after_lanjut_interbank(self, timeout=8.0) -> str:
-        """Poll setelah Lanjut di flow interbank — lightweight .exists per cycle.
+        """Poll setelah Lanjut di flow interbank � lightweight .exists per cycle.
         Return: 'form' | 'layanan' | 'error' | 'timeout'
         """
         end = time.time() + timeout
@@ -1319,7 +1360,7 @@ class MyBcaTransferWorker(threading.Thread):
         return "timeout"
 
     def _wait_nama_screen(self, timeout=12.0) -> str:
-        """Poll setelah Lanjut rekening — tunggu layar Nama/Nominal muncul.
+        """Poll setelah Lanjut rekening � tunggu layar Nama/Nominal muncul.
         Return: 'ok' | 'error' | 'timeout'
         """
         end = time.time() + timeout
@@ -1334,7 +1375,7 @@ class MyBcaTransferWorker(threading.Thread):
         return "timeout"
 
     def _wait_konfirmasi_bca(self, timeout=8.0) -> str:
-        """Poll setelah Lanjut nominal — tunggu layar Konfirmasi/PIN muncul.
+        """Poll setelah Lanjut nominal � tunggu layar Konfirmasi/PIN muncul.
         Return: 'konfirmasi' | 'pin' | 'error' | 'timeout'
         """
         end = time.time() + timeout
@@ -1351,7 +1392,7 @@ class MyBcaTransferWorker(threading.Thread):
             except Exception: pass
             time.sleep(0.3)
         return "timeout"
-    # ── End adaptive-wait helpers ───────────────────────────────────
+    # -- End adaptive-wait helpers -----------------------------------
 
     def _input_trx_pin(self) -> bool:
         """Input PIN transaksi - samakan dengan PGTOTOALLBANK: batch + 0.3s delay."""
@@ -1514,7 +1555,7 @@ class MyBcaTransferWorker(threading.Thread):
         except Exception as e: self._log(f"select_bank: {e}"); return False
 
     def _fill_rekening_bca(self, no_rek: str) -> bool:
-        """Sesama BCA: isi rekening tujuan, klik Lanjut — samain PGTOTOALLBANK."""
+        """Sesama BCA: isi rekening tujuan, klik Lanjut � samain PGTOTOALLBANK."""
         self._log(f"Isi rekening: {no_rek}")
 
         # 1) Tunggu field rekening muncul (max 6s, adaptif internet lambat)
@@ -1584,7 +1625,7 @@ class MyBcaTransferWorker(threading.Thread):
         if self._handle_popup_error():
             return False
 
-        # 6) Tunggu layar pindah (max 5s) — samain PGTOTOALLBANK
+        # 6) Tunggu layar pindah (max 5s) � samain PGTOTOALLBANK
         for _ in range(20):
             if self.d(textContains="Nominal").exists or self.d(textContains="Nama").exists:
                 return True
@@ -1594,7 +1635,7 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _fill_rekening_interbank(self, no_rek: str) -> bool:
-        """Antar bank: isi rekening tujuan, klik Lanjut — samain PGTOTOALLBANK."""
+        """Antar bank: isi rekening tujuan, klik Lanjut � samain PGTOTOALLBANK."""
         self._log(f"Isi rekening: {no_rek}")
 
         # 1) Tunggu field rekening muncul (max 6s)
@@ -1674,7 +1715,7 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _scrape_nama_penerima(self) -> str:
-        """Scrape nama penerima — single dump, no retry (cosmetic only)."""
+        """Scrape nama penerima � single dump, no retry (cosmetic only)."""
         try:
             xml = self.d.dump_hierarchy()
             texts = re.findall(r'text="([^"]+)"', xml)
@@ -1709,10 +1750,10 @@ class MyBcaTransferWorker(threading.Thread):
         return ""
 
     def _fill_nominal_and_pin_bca(self, nominal: int) -> bool:
-        """Sesama BCA: isi nominal, 2x Lanjut, input PIN — samain PGTOTOALLBANK."""
+        """Sesama BCA: isi nominal, 2x Lanjut, input PIN � samain PGTOTOALLBANK."""
         self._log(f"Isi nominal: Rp {nominal:,}")
 
-        # isi nominal — samain PGTOTOALLBANK
+        # isi nominal � samain PGTOTOALLBANK
         try:
             el = self.d(resourceId="com.bca.mybca.omni.android:id/2131366105")
             if not el.exists:
@@ -1743,7 +1784,7 @@ class MyBcaTransferWorker(threading.Thread):
                 self._shell("input tap 360 1200")
         except Exception: pass
 
-        # Tunggu konfirmasi — samain PGTOTOALLBANK
+        # Tunggu konfirmasi � samain PGTOTOALLBANK
         state = self._wait_konfirmasi_bca(timeout=8.0)
         if state == "error":
             self._handle_popup_error()
@@ -1754,7 +1795,7 @@ class MyBcaTransferWorker(threading.Thread):
             self._input_trx_pin()
             return True
 
-        # Lanjut #2 (konfirmasi → PIN)
+        # Lanjut #2 (konfirmasi ? PIN)
         try:
             lanjut2 = self.d(resourceId="com.bca.mybca.omni.android:id/2131362411")
             if not lanjut2.exists:
@@ -1766,7 +1807,7 @@ class MyBcaTransferWorker(threading.Thread):
         except Exception: pass
         time.sleep(0.3)
 
-        # Tunggu PIN — samain PGTOTOALLBANK
+        # Tunggu PIN � samain PGTOTOALLBANK
         if self._wait_pin_pad(timeout=12.0):
             self._log("Input PIN...")
             self._input_trx_pin()
@@ -1777,10 +1818,10 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _fill_nominal_and_pin_interbank(self, nominal: int) -> bool:
-        """Antar bank: isi nominal, pilih BI-FAST, 2x Lanjut, input PIN — samain PGTOTOALLBANK."""
+        """Antar bank: isi nominal, pilih BI-FAST, 2x Lanjut, input PIN � samain PGTOTOALLBANK."""
         self._log(f"Isi nominal: Rp {nominal:,}")
 
-        # isi nominal — samain PGTOTOALLBANK
+        # isi nominal � samain PGTOTOALLBANK
         try:
             el = self.d(resourceId="com.bca.mybca.omni.android:id/2131366105")
             if not el.exists:
@@ -1800,7 +1841,7 @@ class MyBcaTransferWorker(threading.Thread):
             self._log(f"Gagal isi nominal: {e}")
             return False
 
-        # ── Buka Layanan Transfer + Pilih BI FAST ──
+        # -- Buka Layanan Transfer + Pilih BI FAST --
         try:
             opened = False
             for attempt in range(3):
@@ -1856,7 +1897,7 @@ class MyBcaTransferWorker(threading.Thread):
         # Tunggu konfirmasi/PIN
         state = self._wait_konfirmasi_bca(timeout=8.0)
         if state == "error":
-            # BI FAST error → cek & fallback Realtime Online
+            # BI FAST error ? cek & fallback Realtime Online
             bifast_err = False
             for err_txt in ["pilih layanan", "gunakan layanan", "tidak valid", "pemeliharaan"]:
                 if self.d(textContains=err_txt).exists:
@@ -1867,7 +1908,7 @@ class MyBcaTransferWorker(threading.Thread):
                     ok_btn = self.d(text="OK")
                     if ok_btn.exists: ok_btn.click(); time.sleep(0.5)
                 except Exception: pass
-                self._log("BI FAST rejected → fallback Realtime Online")
+                self._log("BI FAST rejected ? fallback Realtime Online")
                 for rt_txt in ["Realtime Online", "Real Time", "Online"]:
                     try:
                         rt = self.d(textContains=rt_txt)
@@ -1890,7 +1931,7 @@ class MyBcaTransferWorker(threading.Thread):
             self._input_trx_pin()
             return True
 
-        # Lanjut konfirmasi → PIN
+        # Lanjut konfirmasi ? PIN
         try:
             lanjut2 = self.d(resourceId="com.bca.mybca.omni.android:id/2131362411")
             if not lanjut2.exists:
@@ -2084,7 +2125,7 @@ class MyBcaTransferWorker(threading.Thread):
             if nama: self._log(f"[{rid}] Penerima: {nama}")
             # Verifikasi nama penerima
             if nama and not self._verify_nama_penerima(req.nama_bank, nama):
-                self._log(f"[{rid}] ❌ NAMA TIDAK COCOK! Expected: {req.nama_bank}, Got: {nama}")
+                self._log(f"[{rid}] ? NAMA TIDAK COCOK! Expected: {req.nama_bank}, Got: {nama}")
                 self._back_to_home()
                 self.ui_q.put(("update_bank", (self.device_id, "status", "Ready")))
                 return ("NAMA_SALAH", "", 0)
@@ -2105,7 +2146,7 @@ class MyBcaTransferWorker(threading.Thread):
             if nama: self._log(f"[{rid}] Penerima: {nama}")
             # Verifikasi nama penerima
             if nama and not self._verify_nama_penerima(req.nama_bank, nama):
-                self._log(f"[{rid}] ❌ NAMA TIDAK COCOK! Expected: {req.nama_bank}, Got: {nama}")
+                self._log(f"[{rid}] ? NAMA TIDAK COCOK! Expected: {req.nama_bank}, Got: {nama}")
                 self._back_to_home()
                 self.ui_q.put(("update_bank", (self.device_id, "status", "Ready")))
                 return ("NAMA_SALAH", "", 0)
@@ -2140,7 +2181,7 @@ class MyBcaTransferWorker(threading.Thread):
             self._log("Login gagal, lanjut...")
 
         while not self._stop.is_set():
-            # ── Periodic health check (every ~10s while idle) ──
+            # -- Periodic health check (every ~10s while idle) --
             got_job = False
             for _ in range(10):  # 10 x 1s = 10s health check interval
                 if self._stop.is_set():
@@ -2159,7 +2200,7 @@ class MyBcaTransferWorker(threading.Thread):
                 # No job for 10s, check device health
                 if not self._is_device_alive():
                     self._log("Device disconnected!")
-                    self.ui_q.put(("update_bank", (self.device_id, "status", "❌ Disconnected")))
+                    self.ui_q.put(("update_bank", (self.device_id, "status", "Disconnected")))
                     self.ui_q.put(("update_bank", (self.device_id, "saldo", "-")))
                     self.current_saldo = 0
                     # ===== FIX: Drain stale requests dari queue dan requeue =====
@@ -2191,7 +2232,7 @@ class MyBcaTransferWorker(threading.Thread):
                             break
                 continue
 
-            # ── Process job ──
+            # -- Process job --
             rid = req.request_id
             # ===== FIX: Reload global success set untuk cek apakah worker lain sudah selesaikan =====
             self._done = _load_success()
@@ -2206,7 +2247,7 @@ class MyBcaTransferWorker(threading.Thread):
             # Check device before transfer
             if not self._is_device_alive():
                 self._log(f"[{rid}] Device disconnected, requeue")
-                self.ui_q.put(("update_bank", (self.device_id, "status", "❌ Disconnected")))
+                self.ui_q.put(("update_bank", (self.device_id, "status", "Disconnected")))
                 self.ui_q.put(("update_request", (rid, "Pending", "")))
                 self.ui_q.put(("requeue", req))
                 continue
@@ -2403,7 +2444,7 @@ class TelethonWorker(threading.Thread):
           - Berhasil klik PROSES DAN verifikasi text berubah
           - ATAU proses_already_clicked=True (retry di instance yang sama)
         Return False jika:
-          - PROSES sudah tidak ada (diklaim user lain) → SKIP
+          - PROSES sudah tidak ada (diklaim user lain) ? SKIP
           - Verifikasi gagal (text tidak berubah = klik tidak efektif)
         """
         rid = req.request_id
@@ -2544,8 +2585,8 @@ class TelethonWorker(threading.Thread):
                         if claimed_by_after:
                             # Ada "Diproses oleh:" sekarang
                             if my_username and claimed_by_after == my_username:
-                                # KITA yang claim! ✓
-                                self._log(f"[{rid}] claim: VERIFIED ✓ - Diproses oleh @{claimed_by_after} (KITA!)")
+                                # KITA yang claim! ?
+                                self._log(f"[{rid}] claim: VERIFIED ? - Diproses oleh @{claimed_by_after} (KITA!)")
                                 verified = True
                                 break
                             else:
@@ -2605,7 +2646,7 @@ class TelethonWorker(threading.Thread):
                             final_claimed_by = extract_diproses_by(msg_final.text or "")
                             if final_claimed_by:
                                 if my_username and final_claimed_by == my_username:
-                                    self._log(f"[{rid}] claim: Final - Diproses oleh @{final_claimed_by} (KITA!) ✓")
+                                    self._log(f"[{rid}] claim: Final - Diproses oleh @{final_claimed_by} (KITA!) ?")
                                     return True
                                 else:
                                     self._log(f"[{rid}] claim: Final - Diproses oleh @{final_claimed_by} (bukan kita) - SKIP!")
@@ -3099,7 +3140,7 @@ class TelethonWorker(threading.Thread):
                 self._log("Need login...")
                 logged_in_via_qr = False
 
-                # ── Try QR Code Login first ──
+                # -- Try QR Code Login first --
                 if HAS_QRCODE:
                     self._qr_cancel.clear()
                     self._log("Attempting QR Code login...")
@@ -3243,9 +3284,12 @@ class TelethonWorker(threading.Thread):
                                 self.ui_q.put(("tg_need_2fa", None))
                                 pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
                                 if pwd:
-                                    await self.client.sign_in(password=pwd)
-                                    logged_in_via_qr = True
-                                    self._log("2FA password accepted!")
+                                    try:
+                                        await self.client.sign_in(password=pwd)
+                                        logged_in_via_qr = True
+                                        self._log("2FA password accepted!")
+                                    except Exception as e2fa:
+                                        self._log(f"2FA sign_in failed: {e2fa}")
                                 else:
                                     self._log("2FA password cancelled")
                             except Exception as e2:
@@ -3267,9 +3311,12 @@ class TelethonWorker(threading.Thread):
                                             self.ui_q.put(("tg_need_2fa", None))
                                             pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
                                             if pwd:
-                                                await self.client.sign_in(password=pwd)
-                                                logged_in_via_qr = True
-                                                self._log("2FA password accepted!")
+                                                try:
+                                                    await self.client.sign_in(password=pwd)
+                                                    logged_in_via_qr = True
+                                                    self._log("2FA password accepted!")
+                                                except Exception as e2fa:
+                                                    self._log(f"2FA sign_in failed: {e2fa}")
                                             else:
                                                 self._log("2FA password cancelled")
                                     except Exception as reconn_err2:
@@ -3287,9 +3334,12 @@ class TelethonWorker(threading.Thread):
                         self.ui_q.put(("tg_need_2fa", None))
                         pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
                         if pwd:
-                            await self.client.sign_in(password=pwd)
-                            logged_in_via_qr = True
-                            self._log("2FA password accepted! Login OK!")
+                            try:
+                                await self.client.sign_in(password=pwd)
+                                logged_in_via_qr = True
+                                self._log("2FA password accepted! Login OK!")
+                            except Exception as e2fa:
+                                self._log(f"2FA sign_in failed: {e2fa}")
                         else:
                             self._log("2FA password cancelled")
                     except Exception as e:
@@ -3301,9 +3351,12 @@ class TelethonWorker(threading.Thread):
                             self.ui_q.put(("tg_need_2fa", None))
                             pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
                             if pwd:
-                                await self.client.sign_in(password=pwd)
-                                logged_in_via_qr = True
-                                self._log("2FA password accepted! Login OK!")
+                                try:
+                                    await self.client.sign_in(password=pwd)
+                                    logged_in_via_qr = True
+                                    self._log("2FA password accepted! Login OK!")
+                                except Exception as e2fa:
+                                    self._log(f"2FA sign_in failed: {e2fa}")
                             else:
                                 self._log("2FA password cancelled")
                         else:
@@ -3326,9 +3379,12 @@ class TelethonWorker(threading.Thread):
                                         self.ui_q.put(("tg_need_2fa", None))
                                         pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
                                         if pwd:
-                                            await self.client.sign_in(password=pwd)
-                                            logged_in_via_qr = True
-                                            self._log("2FA password accepted! Login OK!")
+                                            try:
+                                                await self.client.sign_in(password=pwd)
+                                                logged_in_via_qr = True
+                                                self._log("2FA password accepted! Login OK!")
+                                            except Exception as e2fa:
+                                                self._log(f"2FA sign_in failed: {e2fa}")
                                         else:
                                             self._log("2FA password cancelled")
                                 except SessionPasswordNeededError:
@@ -3336,9 +3392,12 @@ class TelethonWorker(threading.Thread):
                                     self.ui_q.put(("tg_need_2fa", None))
                                     pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
                                     if pwd:
-                                        await self.client.sign_in(password=pwd)
-                                        logged_in_via_qr = True
-                                        self._log("2FA password accepted! Login OK!")
+                                        try:
+                                            await self.client.sign_in(password=pwd)
+                                            logged_in_via_qr = True
+                                            self._log("2FA password accepted! Login OK!")
+                                        except Exception as e2fa:
+                                            self._log(f"2FA sign_in failed: {e2fa}")
                                     else:
                                         self._log("2FA password cancelled")
                                 except Exception as e2fa:
@@ -3347,7 +3406,7 @@ class TelethonWorker(threading.Thread):
                                 self._log(f"QR login error: {e}")
                                 self.ui_q.put(("tg_qr_close", None))
 
-                # ── Fall back to Phone OTP if QR didn't work ──
+                # -- Fall back to Phone OTP if QR didn't work --
                 try:
                     is_authed = await self.client.is_user_authorized()
                 except SessionPasswordNeededError:
@@ -3356,8 +3415,12 @@ class TelethonWorker(threading.Thread):
                     self.ui_q.put(("tg_need_2fa", None))
                     pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
                     if pwd:
-                        await self.client.sign_in(password=pwd)
-                        is_authed = True
+                        try:
+                            await self.client.sign_in(password=pwd)
+                            is_authed = True
+                        except Exception as e2fa:
+                            self._log(f"2FA sign_in failed: {e2fa}")
+                            return
                     else:
                         self._log("2FA cancelled")
                         return
@@ -3389,7 +3452,11 @@ class TelethonWorker(threading.Thread):
                             self._log("2FA required")
                             self.ui_q.put(("tg_need_2fa", None))
                             pwd = await asyncio.get_event_loop().run_in_executor(None, self._2fa_queue.get)
-                            await self.client.sign_in(password=pwd)
+                            try:
+                                await self.client.sign_in(password=pwd)
+                            except Exception as e2fa:
+                                self._log(f"2FA sign_in failed: {e2fa}")
+                                return
                         else:
                             self._log(f"Login error: {e}")
                             return
@@ -3571,7 +3638,7 @@ class TelethonWorker(threading.Thread):
 # GUI  (PySide6 / Qt6)
 # ======================================================================
 
-# ── Dark Palette (QSS) ──
+# -- Dark Palette (QSS) --
 DARK_QSS = """
 QMainWindow, QWidget { background-color: #1e1e2e; color: #cdd6f4; }
 QTabWidget::pane { border: 1px solid #45475a; background: #1e1e2e; }
@@ -3638,7 +3705,7 @@ def _make_camera_icon(size=20) -> QIcon:
 class InjectDanaApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"LELEPAY - INJECTION v{APP_VERSION} - Fair Distribution")
+        self.setWindowTitle(f"LELEPAY - INJECTION v{APP_VERSION}")
         self.resize(1200, 800)
 
         # Set window icon - handle both frozen (EXE) and non-frozen (script) cases
@@ -3770,9 +3837,9 @@ class InjectDanaApp(QMainWindow):
         self._update_progress_dlg = progress
         progress.show()
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  BUILD GUI
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _build_gui(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -3786,7 +3853,7 @@ class InjectDanaApp(QMainWindow):
         tabs.addTab(page_main, "  MAIN  ")
         tabs.addTab(page_config, "  CONFIG  ")
 
-        # ── MAIN TAB ──
+        # -- MAIN TAB --
         main_lay = QHBoxLayout(page_main)
         splitter = QSplitter(Qt.Horizontal)
         main_lay.addWidget(splitter)
@@ -3805,35 +3872,35 @@ class InjectDanaApp(QMainWindow):
         splitter.setCollapsible(0, False)  # Left panel tidak bisa di-collapse
         splitter.setCollapsible(1, False)  # Right panel tidak bisa di-collapse
 
-        # ── Controls ──
+        # -- Controls --
         ctrl = QGroupBox("Control")
         ctrl_lay = QHBoxLayout(ctrl)
         left_lay.addWidget(ctrl)
 
-        self.btn_start = QPushButton("▶ Start")
+        self.btn_start = QPushButton("Start")
         self.btn_start.setObjectName("startBtn")
         self.btn_start.clicked.connect(self.start_all)
         ctrl_lay.addWidget(self.btn_start)
 
-        self.btn_stop = QPushButton("⏹ Stop")
+        self.btn_stop = QPushButton("Stop")
         self.btn_stop.setObjectName("stopBtn")
         self.btn_stop.clicked.connect(self.stop_all)
         self.btn_stop.setEnabled(False)
         ctrl_lay.addWidget(self.btn_stop)
 
-        btn_save = QPushButton("💾 Save")
+        btn_save = QPushButton("Save")
         btn_save.setObjectName("saveBtn")
         btn_save.clicked.connect(self._save_gui_to_config)
         ctrl_lay.addWidget(btn_save)
 
         ctrl_lay.addSpacing(20)
         ctrl_lay.addWidget(QLabel("TG:"))
-        self.lbl_tg = QLabel("○ Offline")
+        self.lbl_tg = QLabel("Offline")
         self.lbl_tg.setStyleSheet("color: gray; font-weight: bold;")
         ctrl_lay.addWidget(self.lbl_tg)
         ctrl_lay.addStretch()
 
-        # ── Bank Table ──
+        # -- Bank Table --
         grp_bank = QGroupBox("Bank (myBCA HP)")
         grp_bank_lay = QVBoxLayout(grp_bank)
         left_lay.addWidget(grp_bank)
@@ -3850,18 +3917,18 @@ class InjectDanaApp(QMainWindow):
         self.tbl_banks.customContextMenuRequested.connect(self._show_bank_context_menu)
         grp_bank_lay.addWidget(self.tbl_banks)
 
-        # ── Request Table ──
+        # -- Request Table --
         grp_req = QGroupBox("Request Suntikan")
         grp_req_lay = QVBoxLayout(grp_req)
         left_lay.addWidget(grp_req, stretch=1)
 
         self.tbl_req = QTableWidget(0, 12)
         self.tbl_req.setHorizontalHeaderLabels(
-            ["Time", "Nama", "Bank", "No Rek", "Nominal", "Asset", "Status", "Bank Used", "📷", "▶", "↻", "❌"]
+            ["Time", "Nama", "Bank", "No Rek", "Nominal", "Asset", "Status", "Bank Used", "SS", "P", "R", "X"]
         )
         self.tbl_req.setMinimumWidth(720)  # Minimal lebar tabel
         hdr = self.tbl_req.horizontalHeader()
-        #                    Time  Nama  Bank  NoRek  Nominal Asset Status BankUsed  📷   ▶   ↻   ❌
+        #                    Time  Nama  Bank  NoRek  Nominal Asset Status BankUsed  ??   ?   ?   ?
         for i, w in enumerate([48,  140,   42,   90,    85,    55,   65,   120,     28,  28,  28,  28]):
             self.tbl_req.setColumnWidth(i, w)
         hdr.setStretchLastSection(False)
@@ -3878,7 +3945,7 @@ class InjectDanaApp(QMainWindow):
         self.tbl_req.cellClicked.connect(self._on_req_cell_clicked)
         grp_req_lay.addWidget(self.tbl_req)
 
-        # ── Right: status + log ──
+        # -- Right: status + log --
         self.lbl_status = QLabel("Idle.")
         self.lbl_status.setStyleSheet(
             "background: #313244; color: #cdd6f4; padding: 6px 10px; border-radius: 4px; font-weight: bold; font-size: 11pt;"
@@ -3890,7 +3957,7 @@ class InjectDanaApp(QMainWindow):
         self.txt_log.setFont(QFont("Consolas", 9, QFont.Bold))
         right_lay.addWidget(self.txt_log)
 
-        # ── TG Profile (bottom of right sidebar) ──
+        # -- TG Profile (bottom of right sidebar) --
         self.tg_profile_widget = QWidget()
         tg_prof_lay = QHBoxLayout(self.tg_profile_widget)
         tg_prof_lay.setContentsMargins(8, 8, 8, 8)
@@ -3921,14 +3988,14 @@ class InjectDanaApp(QMainWindow):
         tg_prof_lay.addStretch()
 
         # Online indicator dot
-        self.lbl_tg_dot = QLabel("●")
+        self.lbl_tg_dot = QLabel("?")
         self.lbl_tg_dot.setStyleSheet("color: #585b70; font-size: 14pt; border: none; background: transparent;")
         tg_prof_lay.addWidget(self.lbl_tg_dot)
 
         self.tg_profile_widget.setFixedHeight(62)
         right_lay.addWidget(self.tg_profile_widget)
 
-        # ── CONFIG TAB ──
+        # -- CONFIG TAB --
         cfg_lay = QVBoxLayout(page_config)
         cfg_lay.setContentsMargins(16, 16, 16, 16)
 
@@ -3965,10 +4032,10 @@ class InjectDanaApp(QMainWindow):
         btn_add = QPushButton("+ Tambah")
         btn_add.clicked.connect(self._bank_add)
         ba_btn_row.addWidget(btn_add)
-        btn_edit = QPushButton("✏ Edit")
+        btn_edit = QPushButton("Edit")
         btn_edit.clicked.connect(self._bank_edit)
         ba_btn_row.addWidget(btn_edit)
-        btn_remove = QPushButton("✕ Hapus")
+        btn_remove = QPushButton("Hapus")
         btn_remove.clicked.connect(self._bank_remove)
         ba_btn_row.addWidget(btn_remove)
         ba_btn_row.addStretch()
@@ -3985,7 +4052,7 @@ class InjectDanaApp(QMainWindow):
         grp_opt = QGroupBox("Options")
         opt_lay = QVBoxLayout(grp_opt)
         cfg_lay.addWidget(grp_opt)
-        self.chk_auto = QCheckBox("Auto Process (otomatis transfer tanpa konfirmasi — HATI-HATI!)")
+        self.chk_auto = QCheckBox("Auto Process (otomatis transfer tanpa konfirmasi � HATI-HATI!)")
         opt_lay.addWidget(self.chk_auto)
         row_b = QHBoxLayout()
         opt_lay.addLayout(row_b)
@@ -4008,9 +4075,9 @@ class InjectDanaApp(QMainWindow):
         # Internal: store bank data list (mirrors tbl_bank_cfg)
         self._bank_data: List[dict] = []
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  TG AVATAR helpers
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _set_default_avatar(self):
         """Draw a default gray circle with user icon."""
         size = 42
@@ -4100,9 +4167,9 @@ class InjectDanaApp(QMainWindow):
         p.end()
         self.lbl_tg_avatar.setPixmap(pix)
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  BANK ACCOUNT DIALOG
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _bank_dialog(self, title="Tambah Bank", data=None) -> Optional[dict]:
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
@@ -4193,9 +4260,9 @@ class InjectDanaApp(QMainWindow):
             self.tbl_bank_cfg.setItem(r, 3, QTableWidgetItem("*" * min(len(b.get("password", "")), 8)))
             self.tbl_bank_cfg.setItem(r, 4, QTableWidgetItem("*" * min(len(b.get("pin", "")), 6)))
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  CONFIG LOAD / SAVE
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _load_config_to_gui(self):
         self.ent_phone.setText(self.cfg.get("phone", ""))
         self.chk_auto.setChecked(self.cfg.get("auto_process", False))
@@ -4204,10 +4271,10 @@ class InjectDanaApp(QMainWindow):
         self._bank_data = list(self.cfg.get("banks", []))
         self._refresh_bank_cfg_table()
         if self.cfg.get("session_string"):
-            self.lbl_tg_login.setText("✅ Session tersimpan (auto-login saat Start)")
+            self.lbl_tg_login.setText("? Session tersimpan (auto-login saat Start)")
             self.lbl_tg_login.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 11pt;")
         else:
-            self.lbl_tg_login.setText("Belum login — Klik Start untuk scan QR")
+            self.lbl_tg_login.setText("Belum login � Klik Start untuk scan QR")
             self.lbl_tg_login.setStyleSheet("color: #f9e2af; font-size: 11pt;")
 
     def _save_gui_to_config(self):
@@ -4248,7 +4315,7 @@ class InjectDanaApp(QMainWindow):
             return
         self.cfg["session_string"] = ""
         save_config(self.cfg)
-        self.lbl_tg_login.setText("Logged out — Klik Start untuk scan QR")
+        self.lbl_tg_login.setText("Logged out � Klik Start untuk scan QR")
         self.lbl_tg_login.setStyleSheet("color: #f9e2af; font-size: 11pt;")
         # Reset sidebar profile
         self.lbl_tg_name.setText("Offline")
@@ -4257,9 +4324,9 @@ class InjectDanaApp(QMainWindow):
         self._set_default_avatar()
         self._log("Telegram session cleared (logged out)")
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  LOGGING
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _log(self, msg):
         ts = time.strftime("%H:%M:%S")
         full = f"[{ts}] {msg}"
@@ -4267,9 +4334,9 @@ class InjectDanaApp(QMainWindow):
         sb = self.txt_log.verticalScrollBar()
         sb.setValue(sb.maximum())
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  REQUEST TABLE helpers
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _find_req_row(self, rid: str) -> int:
         for r in range(self.tbl_req.rowCount()):
             item = self.tbl_req.item(r, 0)
@@ -4312,21 +4379,21 @@ class InjectDanaApp(QMainWindow):
         
         # Action columns
         # Proses button
-        proses_item = QTableWidgetItem("▶")
+        proses_item = QTableWidgetItem("P")
         proses_item.setTextAlignment(Qt.AlignCenter)
         proses_item.setForeground(QColor("#a6e3a1"))
         proses_item.setToolTip("Proses Transfer")
         self.tbl_req.setItem(r, 9, proses_item)
         
         # Retry button
-        retry_item = QTableWidgetItem("↻")
+        retry_item = QTableWidgetItem("R")
         retry_item.setTextAlignment(Qt.AlignCenter)
         retry_item.setForeground(QColor("#f9e2af"))
         retry_item.setToolTip("Retry")
         self.tbl_req.setItem(r, 10, retry_item)
         
         # Batal button
-        batal_item = QTableWidgetItem("❌")
+        batal_item = QTableWidgetItem("X")
         batal_item.setTextAlignment(Qt.AlignCenter)
         batal_item.setForeground(QColor("#f38ba8"))
         batal_item.setToolTip("Batalkan")
@@ -4364,7 +4431,7 @@ class InjectDanaApp(QMainWindow):
         if item:
             item.setData(Qt.UserRole + 1, ss_path)
             if ss_path:
-                item.setToolTip(f"📷 {os.path.basename(ss_path)}\nKlik untuk buka")
+                item.setToolTip(f"[IMG] {os.path.basename(ss_path)}\nKlik untuk buka")
 
     def _on_req_cell_clicked(self, row, col):
         # Col 8 = Screenshot
@@ -4406,9 +4473,9 @@ class InjectDanaApp(QMainWindow):
             self._manual_batal()
             return
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  BANK TABLE helpers
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _show_bank_context_menu(self, pos):
         """Show context menu on right-click for bank table."""
         row = self.tbl_banks.rowAt(pos.y())
@@ -4429,7 +4496,7 @@ class InjectDanaApp(QMainWindow):
         menu = QMenu(self)
         
         # Remove from table action
-        act_remove = QAction(f"🗑 Hapus {name} dari tabel", self)
+        act_remove = QAction(f"Hapus {name} dari tabel", self)
         act_remove.triggered.connect(lambda: self._remove_bank_from_runtime(did, row))
         menu.addAction(act_remove)
         
@@ -4456,7 +4523,7 @@ class InjectDanaApp(QMainWindow):
         
         # Update status
         active_count = len([w for w in self.bank_workers if w.is_alive()])
-        self.lbl_status.setText(f"Running — {active_count} bank(s)")
+        self.lbl_status.setText(f"Running � {active_count} bank(s)")
         
         self._log(f"Bank dihapus dari runtime: {device_id[-8:]}")
 
@@ -4660,9 +4727,9 @@ class InjectDanaApp(QMainWindow):
                     reks.add(f"msg:{req.message_id}")
             return reks
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  START / STOP
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def start_all(self):
         # Disable Start, enable Stop
         self.btn_start.setEnabled(False)
@@ -4711,7 +4778,7 @@ class InjectDanaApp(QMainWindow):
 
         if skipped:
             self._log(f"Skipped (not connected): {', '.join(skipped)}")
-        self.lbl_status.setText(f"Running — {len(self.bank_workers)} bank(s)")
+        self.lbl_status.setText(f"Running � {len(self.bank_workers)} bank(s)")
         self._log(f"Started {len(self.bank_workers)} bank worker(s)")
 
         # Start periodic ADB hotplug scanner (detect newly connected devices)
@@ -4744,7 +4811,7 @@ class InjectDanaApp(QMainWindow):
 
                 # New device detected! Start worker
                 bname = bc.get('name', '') or did[-8:]
-                self._log(f"🔌 HP baru terdeteksi: {bname} ({did[-8:]}) — auto-starting...")
+                self._log(f"[NEW] HP baru terdeteksi: {bname} ({did[-8:]}) - auto-starting...")
                 jq = queue.Queue()
                 self.bank_queues[did] = jq
                 w = MyBcaTransferWorker(
@@ -4756,7 +4823,7 @@ class InjectDanaApp(QMainWindow):
                 self.bank_workers.append(w)
                 w.start()
                 self._add_bank_to_table(did, bc.get("name", ""), bc.get("rekening", ""))
-                self.lbl_status.setText(f"Running — {len(self.bank_workers)} bank(s)")
+                self.lbl_status.setText(f"Running � {len(self.bank_workers)} bank(s)")
                 # NOTE: Tidak langsung dispatch pending di sini.
                 # Worker akan notify 'worker_ready' setelah login+saldo selesai,
                 # lalu app dispatch pending requests ke worker yang sudah siap.
@@ -4783,7 +4850,7 @@ class InjectDanaApp(QMainWindow):
         self.bank_workers.clear()
         self.bank_queues.clear()
         self.tbl_banks.setRowCount(0)
-        self.lbl_tg.setText("○ Offline")
+        self.lbl_tg.setText("Offline")
         self.lbl_tg.setStyleSheet("color: gray; font-weight: bold;")
         self.lbl_status.setText("Stopped.")
         # Enable Start, disable Stop
@@ -4796,9 +4863,9 @@ class InjectDanaApp(QMainWindow):
         self._set_default_avatar()
         self._log("All stopped")
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  REQUEST DISPATCH
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _find_best_bank(self, req):
         """Find the best bank worker using round-robin across workers with enough saldo.
         Ensures requests are distributed evenly across all available devices."""
@@ -4852,7 +4919,7 @@ class InjectDanaApp(QMainWindow):
                         best_qsize = w.job_q.qsize()
                         best_did = w.device_id
                 if not best_did:
-                    # All workers have known insufficient saldo — skip, don't dispatch
+                    # All workers have known insufficient saldo � skip, don't dispatch
                     self._log(f"[{req.request_id}] Semua bank saldo tidak cukup (butuh Rp {req.nominal:,}). Pending...")
                     return
                 device = best_did
@@ -4872,9 +4939,9 @@ class InjectDanaApp(QMainWindow):
             self._update_request_in_table(rid=req.request_id, status="Dispatched", bank_used=bname)
             self._log(f"[{req.request_id}] Dispatched -> {bname}")
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  OTP / 2FA / QR DIALOGS
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _show_qr_dialog(self, qr_png_data: bytes):
         """Show or update the QR code login dialog."""
         if hasattr(self, '_qr_dlg') and self._qr_dlg and self._qr_dlg.isVisible():
@@ -4886,7 +4953,7 @@ class InjectDanaApp(QMainWindow):
             return
 
         self._qr_dlg = QDialog(self)
-        self._qr_dlg.setWindowTitle("Login Telegram — Scan QR Code")
+        self._qr_dlg.setWindowTitle("Login Telegram � Scan QR Code")
         self._qr_dlg.setMinimumWidth(380)
         lay = QVBoxLayout(self._qr_dlg)
         lay.setSpacing(12)
@@ -4900,7 +4967,7 @@ class InjectDanaApp(QMainWindow):
         # Instructions
         instr = QLabel(
             "1. Buka Telegram di HP\n"
-            "2. Buka Settings → Devices → Link Desktop Device\n"
+            "2. Buka Settings ? Devices ? Link Desktop Device\n"
             "3. Scan QR code di bawah ini"
         )
         instr.setStyleSheet("color: #a6adc8; font-size: 10pt;")
@@ -4923,7 +4990,7 @@ class InjectDanaApp(QMainWindow):
         lay.addWidget(self._qr_lbl_status)
 
         # Fallback button: use phone number instead
-        btn_phone = QPushButton("📱 Login pakai Nomor HP")
+        btn_phone = QPushButton("Login pakai Nomor HP")
         btn_phone.setStyleSheet(
             "color: #6c7086; border: 1px solid #45475a; padding: 6px 12px; font-size: 9pt;"
         )
@@ -4988,9 +5055,9 @@ class InjectDanaApp(QMainWindow):
         ent.returnPressed.connect(submit)
         dlg.exec()
 
-    # ────────────────────────────────────────
+    # ----------------------------------------
     #  UI QUEUE POLL  (100ms timer)
-    # ────────────────────────────────────────
+    # ----------------------------------------
     def _poll_ui_queue(self):
         try:
             for _ in range(50):
@@ -5005,7 +5072,7 @@ class InjectDanaApp(QMainWindow):
 
                 elif cmd == "tg_status":
                     status = msg[1]
-                    self.lbl_tg.setText(f"● {status}")
+                    self.lbl_tg.setText(f"{status}")
                     self.lbl_tg.setStyleSheet("color: #a6e3a1; font-weight: bold;")
                     # Auto-fetch pending requests when connected
                     if status == "Connected":
@@ -5014,9 +5081,9 @@ class InjectDanaApp(QMainWindow):
 
                 elif cmd == "tg_logged_in":
                     self._close_qr_dialog()
-                    self.lbl_tg.setText(f"● {msg[1]}")
+                    self.lbl_tg.setText(f"{msg[1]}")
                     self.lbl_tg.setStyleSheet("color: #a6e3a1; font-weight: bold;")
-                    self.lbl_tg_login.setText(f"✅ Login sebagai: {msg[1]}")
+                    self.lbl_tg_login.setText(f"Login sebagai: {msg[1]}")
                     self.lbl_tg_login.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 11pt;")
 
                 elif cmd == "tg_profile":
@@ -5088,7 +5155,7 @@ class InjectDanaApp(QMainWindow):
                         if w.device_id == device_id:
                             bname = w.bank_name or device_id
                             break
-                    self._log(f"\u2705 {bname} siap terima job!")
+                    self._log(f"[OK] {bname} siap terima job!")
                     # Dispatch all pending requests (will be distributed across available workers)
                     with self._request_lock:
                         pending = [r for r in self.requests.values() if r.status == "Pending"]
@@ -5102,7 +5169,7 @@ class InjectDanaApp(QMainWindow):
                     update_info = msg[1]
                     ver = update_info.get('version', '?')
                     ver = ver.lstrip('v') if ver.startswith('v') else ver
-                    self._log(f"\U0001F514 Update tersedia: v{ver}")
+                    self._log(f"[!] Update tersedia: v{ver}")
                     self._show_update_dialog(update_info)
 
                 elif cmd == "update_progress":
@@ -5117,7 +5184,7 @@ class InjectDanaApp(QMainWindow):
                         self._update_progress_dlg = None
                     result = msg[1]
                     if result.get("path"):
-                        self._log(f"\u2705 Download selesai: {result['path']}")
+                        self._log(f"[OK] Download selesai: {result['path']}")
                         reply = QMessageBox.question(
                             self, "Install Update",
                             "Download selesai!\n\nInstall sekarang?\n(Aplikasi akan restart)",
@@ -5130,7 +5197,7 @@ class InjectDanaApp(QMainWindow):
                                 self.close()
                     else:
                         error = result.get("error", "Unknown error")
-                        self._log(f"\u274C Download gagal: {error}")
+                        self._log(f"[X] Download gagal: {error}")
                         QMessageBox.warning(self, "Download Failed", f"Gagal download update:\n{error}")
 
         except Exception as e:

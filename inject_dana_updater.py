@@ -179,7 +179,7 @@ def check_for_update(current_version: str) -> Optional[dict]:
 def download_update(update_info: dict, dest_folder: str = None, 
                     progress_callback: Callable[[int, int], None] = None) -> Optional[str]:
     """
-    Download update .exe file.
+    Download update .exe file to the same folder as current executable.
     Returns path to downloaded file, or None if failed.
     """
     if not update_info or not update_info.get("download_url"):
@@ -187,14 +187,31 @@ def download_update(update_info: dict, dest_folder: str = None,
     
     try:
         if not dest_folder:
-            dest_folder = tempfile.gettempdir()
+            # Download ke folder yang sama dengan EXE saat ini
+            current_exe = sys.executable
+            if current_exe.lower().endswith('.exe'):
+                dest_folder = os.path.dirname(current_exe)
+            else:
+                # Running from source, use temp
+                dest_folder = tempfile.gettempdir()
         
-        filename = update_info.get("asset_name") or f"INJECT_DANA_{update_info['version']}.exe"
-        dest_path = os.path.join(dest_folder, filename)
+        # Download dengan nama sementara dulu (supaya tidak corrupt kalau gagal)
+        temp_filename = f"INJECT_DANA_UPDATE_{update_info['version']}.exe.tmp"
+        final_filename = update_info.get("asset_name") or "INJECT_DANA.exe"
         
-        success = _download_file(update_info["download_url"], dest_path, progress_callback)
-        if success and os.path.exists(dest_path):
-            return dest_path
+        temp_path = os.path.join(dest_folder, temp_filename)
+        final_path = os.path.join(dest_folder, f"INJECT_DANA_v{update_info['version']}.exe")
+        
+        print(f"[Updater] Downloading to: {temp_path}")
+        
+        success = _download_file(update_info["download_url"], temp_path, progress_callback)
+        if success and os.path.exists(temp_path):
+            # Rename dari .tmp ke final
+            if os.path.exists(final_path):
+                os.remove(final_path)
+            os.rename(temp_path, final_path)
+            print(f"[Updater] Download complete: {final_path}")
+            return final_path
         return None
     except Exception as e:
         print(f"[Updater] Download error: {e}")
@@ -222,45 +239,72 @@ def apply_update(exe_path: str, current_exe: str = None) -> bool:
         print("[Updater] Running from source, cannot auto-update")
         return False
     
+    # Verify downloaded file exists
+    if not os.path.exists(exe_path):
+        print(f"[Updater] Downloaded file not found: {exe_path}")
+        return False
+    
     try:
-        # Create update batch script
+        log_path = os.path.join(tempfile.gettempdir(), "inject_dana_update.log")
+        
+        # Create update batch script with better error handling
         batch_content = f'''@echo off
-echo INJECT DANA - Installing Update...
+echo INJECT DANA - Installing Update... > "{log_path}"
+echo Source: {exe_path} >> "{log_path}"
+echo Target: {current_exe} >> "{log_path}"
 echo.
+
 echo Waiting for app to close...
-timeout /t 2 /nobreak >nul
+echo Waiting for app to close... >> "{log_path}"
+timeout /t 3 /nobreak >nul
 
 :WAIT_LOOP
 tasklist /FI "IMAGENAME eq {os.path.basename(current_exe)}" 2>NUL | find /I /N "{os.path.basename(current_exe)}" >NUL
 if "%ERRORLEVEL%"=="0" (
-    timeout /t 1 /nobreak >nul
+    echo App still running, waiting... >> "{log_path}"
+    timeout /t 2 /nobreak >nul
     goto WAIT_LOOP
 )
 
+echo App closed, copying new version... >> "{log_path}"
 echo Copying new version...
-copy /Y "{exe_path}" "{current_exe}"
+
+REM Try copy with xcopy for better reliability
+xcopy /Y /F "{exe_path}" "{current_exe}*"
 if errorlevel 1 (
-    echo [ERROR] Failed to copy new version!
-    pause
-    exit /b 1
+    echo XCOPY failed, trying copy... >> "{log_path}"
+    copy /Y "{exe_path}" "{current_exe}"
+    if errorlevel 1 (
+        echo [ERROR] Failed to copy new version! >> "{log_path}"
+        echo [ERROR] Failed to copy new version!
+        pause
+        exit /b 1
+    )
 )
 
+echo Copy successful! >> "{log_path}"
+echo Starting updated app... >> "{log_path}"
 echo Starting updated app...
 start "" "{current_exe}"
 
 echo.
+echo Update complete! >> "{log_path}"
 echo Update complete!
 timeout /t 2 /nobreak >nul
 
-REM Cleanup
+REM Cleanup - delete self
 del "%~f0"
 '''
         
         batch_path = os.path.join(tempfile.gettempdir(), "inject_dana_update.bat")
-        with open(batch_path, 'w') as f:
+        with open(batch_path, 'w', encoding='utf-8') as f:
             f.write(batch_content)
         
-        # Start the update script
+        print(f"[Updater] Batch script created: {batch_path}")
+        print(f"[Updater] Source: {exe_path}")
+        print(f"[Updater] Target: {current_exe}")
+        
+        # Start the update script in new console window
         subprocess.Popen(
             f'cmd /c "{batch_path}"',
             shell=True,
