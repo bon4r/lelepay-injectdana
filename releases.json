@@ -1,7 +1,7 @@
 {
-    "version": "3.0.20",
-    "body": "## What's Changed\n- Tambah tab UPDATE di sebelah CONFIG (cek versi + changelog + check update manual)\n- Installer update sekarang mempertahankan nama file INJECT_DANA.exe (tanpa suffix versi)",
-    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.20",
+    "version": "3.0.21",
+    "body": "## What's Changed\n- Fix auto-restart setelah klik Install update\n- Tambah fallback launch supaya app otomatis kebuka lagi lebih stabil\n- Changelog tetap tampil meski sudah versi terbaru",
+    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.21",
     "download_url": "http://178.128.87.151/releases/INJECT_DANA.exe",
     "download_size": 73960148,
     "asset_name": "INJECT_DANA.exe"

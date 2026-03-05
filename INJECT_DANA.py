@@ -5,6 +5,9 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.21: Fix auto-restart setelah install update
+    - Tambah fallback launch setelah update copy (start /D, Start-Process, explorer)
+    - Perbaiki reliability restart otomatis pas klik Install sekarang
 v3.0.20: Update tab + nama EXE tetap
     - Tambah tab UPDATE (cek versi + changelog + tombol check/download)
     - Auto-update install ke nama canonical INJECT_DANA.exe
@@ -170,7 +173,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.20"  # Current app version for update check
+APP_VERSION = "3.0.21"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -3780,6 +3783,19 @@ class InjectDanaApp(QMainWindow):
         checker = updater.UpdateChecker(APP_VERSION, callback=on_update_available)
         checker.start()
 
+        # Also fetch latest release info for UPDATE tab/changelog even when no newer version
+        def _load_latest_info():
+            try:
+                latest = updater.get_latest_release_info()
+                if latest:
+                    self.ui_q.put(("update_latest_info", latest))
+                else:
+                    self.ui_q.put(("update_check_none", None))
+            except Exception as e:
+                self.ui_q.put(("update_check_error", str(e)))
+
+        threading.Thread(target=_load_latest_info, daemon=True).start()
+
     def _check_for_updates_manual(self):
         """Manual check update from Update tab."""
         if not HAS_UPDATER:
@@ -3794,6 +3810,9 @@ class InjectDanaApp(QMainWindow):
                 if info:
                     self.ui_q.put(("update_available", info))
                 else:
+                    latest = updater.get_latest_release_info()
+                    if latest:
+                        self.ui_q.put(("update_latest_info", latest))
                     self.ui_q.put(("update_check_none", None))
             except Exception as e:
                 self.ui_q.put(("update_check_error", str(e)))
@@ -3822,7 +3841,19 @@ class InjectDanaApp(QMainWindow):
         has_download = bool(update_info.get("download_url"))
 
         self.lbl_latest_version.setText(f"Latest: v{version}")
-        self.lbl_update_status.setText("Update tersedia" if has_download else "Update info tersedia")
+
+        try:
+            latest_tuple = updater.parse_version(str(version)) if HAS_UPDATER else (0,)
+            current_tuple = updater.parse_version(str(APP_VERSION)) if HAS_UPDATER else (0,)
+        except Exception:
+            latest_tuple = (0,)
+            current_tuple = (0,)
+
+        if latest_tuple > current_tuple:
+            self.lbl_update_status.setText("Update tersedia")
+        else:
+            self.lbl_update_status.setText("Sudah versi terbaru")
+
         self.txt_update_changelog.setPlainText(body if body else "(Changelog kosong)")
         self.btn_update_download.setEnabled(has_download)
         self.btn_update_github.setEnabled(bool(html_url))
@@ -5308,6 +5339,9 @@ class InjectDanaApp(QMainWindow):
                     self._log(f"[!] Update tersedia: v{ver}")
                     self._render_update_info(update_info)
                     self._show_update_dialog(update_info)
+
+                elif cmd == "update_latest_info":
+                    self._render_update_info(msg[1])
 
                 elif cmd == "update_check_none":
                     self._log("[OK] Tidak ada update baru.")

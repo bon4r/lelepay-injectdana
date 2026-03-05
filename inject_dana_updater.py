@@ -176,6 +176,47 @@ def check_for_update(current_version: str) -> Optional[dict]:
     return None
 
 
+def get_latest_release_info() -> Optional[dict]:
+    """Get latest release metadata (version/changelog/url) without comparing versions."""
+    try:
+        data = _http_get(VPS_RELEASES_JSON)
+        if data:
+            return {
+                "version": data.get("version", ""),
+                "body": data.get("body") or data.get("changelog") or "",
+                "html_url": data.get("html_url", ""),
+                "download_url": data.get("download_url") or data.get("url"),
+                "download_size": data.get("download_size", 0),
+                "asset_name": data.get("asset_name", "INJECT_DANA.exe"),
+            }
+    except Exception:
+        pass
+
+    try:
+        data = _http_get(GITHUB_API_RELEASES)
+        if not data:
+            return None
+
+        assets = data.get("assets", [])
+        exe_asset = None
+        for asset in assets:
+            name = (asset.get("name") or "").lower()
+            if name.endswith(".exe"):
+                exe_asset = asset
+                break
+
+        return {
+            "version": data.get("tag_name", ""),
+            "body": data.get("body", ""),
+            "html_url": data.get("html_url", ""),
+            "download_url": exe_asset.get("browser_download_url") if exe_asset else None,
+            "download_size": exe_asset.get("size", 0) if exe_asset else 0,
+            "asset_name": exe_asset.get("name") if exe_asset else "INJECT_DANA.exe",
+        }
+    except Exception:
+        return None
+
+
 def download_update(update_info: dict, dest_folder: str = None, 
                     progress_callback: Callable[[int, int], None] = None) -> Optional[str]:
     """
@@ -291,7 +332,20 @@ echo Copy successful! >> "{log_path}"
 echo Starting updated app... >> "{log_path}"
 echo Starting updated app...
 timeout /t 1 /nobreak >nul
-start "" "{target_exe}"
+
+REM Try 1: start with explicit working directory
+start "" /D "{target_dir}" "{target_exe}"
+timeout /t 1 /nobreak >nul
+
+REM Try 2: PowerShell Start-Process fallback
+if exist "{target_exe}" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try {{ Start-Process -FilePath '{target_exe}' -WorkingDirectory '{target_dir}' }} catch {{ exit 1 }}"
+)
+
+REM Try 3: explorer fallback (some environments block start)
+if exist "{target_exe}" (
+    explorer "{target_exe}"
+)
 
 echo Update complete! >> "{log_path}"
 echo Update complete!
@@ -310,7 +364,7 @@ del "%~f0"
         
         print(f"[Updater] Batch script created: {batch_path}")
         print(f"[Updater] Source: {exe_path}")
-        print(f"[Updater] Target: {current_exe}")
+        print(f"[Updater] Target: {target_exe}")
         
         # Start the update script in new console window
         subprocess.Popen(
