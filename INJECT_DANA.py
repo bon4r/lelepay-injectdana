@@ -5,6 +5,10 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.19: Fix dispatch ke HP disconnect
+    - Dispatcher skip worker yang ADB-nya sudah putus (real-time check)
+    - Status bank otomatis jadi Disconnected dan saldo reset
+    - Cegah request salah kirim ke rekening dari device yang sudah cabut
 v3.0: Fair distribution untuk multi-user
   - Random delay 0.5-3 detik sebelum claim request
   - Distribusi job lebih merata antar 3 PC
@@ -162,7 +166,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.12"  # Current app version for update check
+APP_VERSION = "3.0.19"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -379,9 +383,9 @@ def _try_claim_file(rid: str, claimer_id: str) -> bool:
                     content = f.read().strip()
                     claimed = json.loads(content) if content else {}
                     if rid in claimed:
-                        # Already claimed � check if by us
+                        # Already claimed - check if by us
                         return claimed[rid] == claimer_id
-                    # Not claimed yet � claim it
+                    # Not claimed yet - claim it
                     claimed[rid] = claimer_id
                     f.seek(0)
                     f.truncate()
@@ -610,6 +614,7 @@ class MyBcaTransferWorker(threading.Thread):
         self._done: set = set()
         self._inflight: set = set()
         self.current_saldo: int = 0
+        self._ready: bool = False  # True setelah login + saldo berhasil
         self._t_start: float = time.monotonic()
         self._t_last: float = self._t_start
 
@@ -1058,7 +1063,7 @@ class MyBcaTransferWorker(threading.Thread):
             for el in self.d(className="android.widget.TextView"):
                 try:
                     text = (el.get_text() or "").strip()
-                    if '?' in text or '�' in text:
+                    if '?' in text or '***' in text:
                         continue
                     if "Rekening" in text or "rekening" in text:
                         continue
@@ -1165,7 +1170,7 @@ class MyBcaTransferWorker(threading.Thread):
                     text = (el.get_text() or "").strip()
                     if not text:
                         continue
-                    if '?' in text or '�' in text or '***' in text:
+                    if '?' in text or '***' in text:
                         continue
                     if re.search(r'\d', text) and 'ekening' not in text:
                         candidates.append(text)
@@ -1188,7 +1193,7 @@ class MyBcaTransferWorker(threading.Thread):
                     cls = node.attrib.get('class', '')
                     if cls == 'android.widget.TextView':
                         continue
-                    if '?' in text or '�' in text:
+                    if '?' in text or '***' in text:
                         continue
                     val = self._try_parse_saldo_from_text(text)
                     if val > 0:
@@ -1268,7 +1273,7 @@ class MyBcaTransferWorker(threading.Thread):
         return self.current_saldo
 
     def _hide_keyboard(self):
-        """Sembunyikan keyboard � samain PGTOTOALLBANK."""
+        """Sembunyikan keyboard - samain PGTOTOALLBANK."""
         try:
             self._shell("input keyevent 4")
             time.sleep(0.2)
@@ -1276,7 +1281,7 @@ class MyBcaTransferWorker(threading.Thread):
             pass
 
     def _finalize_amount_entry(self):
-        """Finalisasi input nominal: tap Done ? di keypad + defocus � samain PGTOTOALLBANK."""
+        """Finalisasi input nominal: tap Done ? di keypad + defocus - samain PGTOTOALLBANK."""
         try:
             self._shell("input tap 620 1500")  # Done ? keypad
             time.sleep(0.25)
@@ -1286,7 +1291,7 @@ class MyBcaTransferWorker(threading.Thread):
             pass
 
     def _tap_lanjut_top(self) -> bool:
-        """Tap tombol Lanjut atas � 1 resourceId check + fallback tap."""
+        """Tap tombol Lanjut atas - 1 resourceId check + fallback tap."""
         try:
             el = self.d(resourceId="com.bca.mybca.omni.android:id/2131362714")
             if el.exists:
@@ -1297,7 +1302,7 @@ class MyBcaTransferWorker(threading.Thread):
         return True
 
     def _tap_lanjut_bottom(self) -> bool:
-        """Tap tombol Lanjut bawah � 1 resourceId check + fallback tap."""
+        """Tap tombol Lanjut bawah - 1 resourceId check + fallback tap."""
         try:
             btn = self.d(resourceId="com.bca.mybca.omni.android:id/2131362712")
             if btn.exists:
@@ -1315,7 +1320,7 @@ class MyBcaTransferWorker(threading.Thread):
         return True
 
     def _wait_pin_pad(self, timeout=12.0) -> bool:
-        """Tunggu sampai layar PIN transaksi muncul � samain PGTOTOALLBANK."""
+        """Tunggu sampai layar PIN transaksi muncul - samain PGTOTOALLBANK."""
         end = time.time() + timeout
         while time.time() < end:
             try:
@@ -1329,7 +1334,7 @@ class MyBcaTransferWorker(threading.Thread):
 
     # -- Adaptive-wait helpers ---------------------------------------
     def _wait_submenu_after_transfer(self, timeout=4.0) -> bool:
-        """Poll sampai submenu Transfer muncul � lightweight .exists."""
+        """Poll sampai submenu Transfer muncul - lightweight .exists."""
         end = time.time() + timeout
         while time.time() < end:
             try:
@@ -1340,7 +1345,7 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _wait_after_lanjut_interbank(self, timeout=8.0) -> str:
-        """Poll setelah Lanjut di flow interbank � lightweight .exists per cycle.
+        """Poll setelah Lanjut di flow interbank - lightweight .exists per cycle.
         Return: 'form' | 'layanan' | 'error' | 'timeout'
         """
         end = time.time() + timeout
@@ -1360,7 +1365,7 @@ class MyBcaTransferWorker(threading.Thread):
         return "timeout"
 
     def _wait_nama_screen(self, timeout=12.0) -> str:
-        """Poll setelah Lanjut rekening � tunggu layar Nama/Nominal muncul.
+        """Poll setelah Lanjut rekening - tunggu layar Nama/Nominal muncul.
         Return: 'ok' | 'error' | 'timeout'
         """
         end = time.time() + timeout
@@ -1375,7 +1380,7 @@ class MyBcaTransferWorker(threading.Thread):
         return "timeout"
 
     def _wait_konfirmasi_bca(self, timeout=8.0) -> str:
-        """Poll setelah Lanjut nominal � tunggu layar Konfirmasi/PIN muncul.
+        """Poll setelah Lanjut nominal - tunggu layar Konfirmasi/PIN muncul.
         Return: 'konfirmasi' | 'pin' | 'error' | 'timeout'
         """
         end = time.time() + timeout
@@ -1555,7 +1560,7 @@ class MyBcaTransferWorker(threading.Thread):
         except Exception as e: self._log(f"select_bank: {e}"); return False
 
     def _fill_rekening_bca(self, no_rek: str) -> bool:
-        """Sesama BCA: isi rekening tujuan, klik Lanjut � samain PGTOTOALLBANK."""
+        """Sesama BCA: isi rekening tujuan, klik Lanjut - samain PGTOTOALLBANK."""
         self._log(f"Isi rekening: {no_rek}")
 
         # 1) Tunggu field rekening muncul (max 6s, adaptif internet lambat)
@@ -1625,7 +1630,7 @@ class MyBcaTransferWorker(threading.Thread):
         if self._handle_popup_error():
             return False
 
-        # 6) Tunggu layar pindah (max 5s) � samain PGTOTOALLBANK
+        # 6) Tunggu layar pindah (max 5s) - samain PGTOTOALLBANK
         for _ in range(20):
             if self.d(textContains="Nominal").exists or self.d(textContains="Nama").exists:
                 return True
@@ -1635,7 +1640,7 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _fill_rekening_interbank(self, no_rek: str) -> bool:
-        """Antar bank: isi rekening tujuan, klik Lanjut � samain PGTOTOALLBANK."""
+        """Antar bank: isi rekening tujuan, klik Lanjut - samain PGTOTOALLBANK."""
         self._log(f"Isi rekening: {no_rek}")
 
         # 1) Tunggu field rekening muncul (max 6s)
@@ -1715,7 +1720,7 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _scrape_nama_penerima(self) -> str:
-        """Scrape nama penerima � single dump, no retry (cosmetic only)."""
+        """Scrape nama penerima - single dump, no retry (cosmetic only)."""
         try:
             xml = self.d.dump_hierarchy()
             texts = re.findall(r'text="([^"]+)"', xml)
@@ -1750,10 +1755,10 @@ class MyBcaTransferWorker(threading.Thread):
         return ""
 
     def _fill_nominal_and_pin_bca(self, nominal: int) -> bool:
-        """Sesama BCA: isi nominal, 2x Lanjut, input PIN � samain PGTOTOALLBANK."""
+        """Sesama BCA: isi nominal, 2x Lanjut, input PIN - samain PGTOTOALLBANK."""
         self._log(f"Isi nominal: Rp {nominal:,}")
 
-        # isi nominal � samain PGTOTOALLBANK
+        # isi nominal - samain PGTOTOALLBANK
         try:
             el = self.d(resourceId="com.bca.mybca.omni.android:id/2131366105")
             if not el.exists:
@@ -1784,7 +1789,7 @@ class MyBcaTransferWorker(threading.Thread):
                 self._shell("input tap 360 1200")
         except Exception: pass
 
-        # Tunggu konfirmasi � samain PGTOTOALLBANK
+        # Tunggu konfirmasi - samain PGTOTOALLBANK
         state = self._wait_konfirmasi_bca(timeout=8.0)
         if state == "error":
             self._handle_popup_error()
@@ -1807,7 +1812,7 @@ class MyBcaTransferWorker(threading.Thread):
         except Exception: pass
         time.sleep(0.3)
 
-        # Tunggu PIN � samain PGTOTOALLBANK
+        # Tunggu PIN - samain PGTOTOALLBANK
         if self._wait_pin_pad(timeout=12.0):
             self._log("Input PIN...")
             self._input_trx_pin()
@@ -1818,10 +1823,10 @@ class MyBcaTransferWorker(threading.Thread):
         return False
 
     def _fill_nominal_and_pin_interbank(self, nominal: int) -> bool:
-        """Antar bank: isi nominal, pilih BI-FAST, 2x Lanjut, input PIN � samain PGTOTOALLBANK."""
+        """Antar bank: isi nominal, pilih BI-FAST, 2x Lanjut, input PIN - samain PGTOTOALLBANK."""
         self._log(f"Isi nominal: Rp {nominal:,}")
 
-        # isi nominal � samain PGTOTOALLBANK
+        # isi nominal - samain PGTOTOALLBANK
         try:
             el = self.d(resourceId="com.bca.mybca.omni.android:id/2131366105")
             if not el.exists:
@@ -2175,9 +2180,11 @@ class MyBcaTransferWorker(threading.Thread):
             if self.current_saldo > 0:
                 self._log(f"Saldo: Rp {self.current_saldo:,}")
                 self.ui_q.put(("update_bank", (self.device_id, "saldo", f"Rp {self.current_saldo:,}")))
+            self._ready = True
             # Notify app: worker ready, bisa terima job pending
             self.ui_q.put(("worker_ready", self.device_id))
         else:
+            self._ready = False
             self._log("Login gagal, lanjut...")
 
         while not self._stop.is_set():
@@ -2200,6 +2207,7 @@ class MyBcaTransferWorker(threading.Thread):
                 # No job for 10s, check device health
                 if not self._is_device_alive():
                     self._log("Device disconnected!")
+                    self._ready = False
                     self.ui_q.put(("update_bank", (self.device_id, "status", "Disconnected")))
                     self.ui_q.put(("update_bank", (self.device_id, "saldo", "-")))
                     self.current_saldo = 0
@@ -2227,7 +2235,10 @@ class MyBcaTransferWorker(threading.Thread):
                                     if self.current_saldo > 0:
                                         self._log(f"Saldo: Rp {self.current_saldo:,}")
                                         self.ui_q.put(("update_bank", (self.device_id, "saldo", f"Rp {self.current_saldo:,}")))
+                                    self._ready = True
+                                    self.ui_q.put(("worker_ready", self.device_id))
                                 else:
+                                    self._ready = False
                                     self._log("Login gagal setelah reconnect")
                             break
                 continue
@@ -2330,6 +2341,8 @@ class MyBcaTransferWorker(threading.Thread):
                 self.ui_q.put(("update_request", (rid, "Gagal", self.bank_name)))
             finally:
                 self._inflight.discard(rid)
+                # Notify app: worker idle, bisa dispatch pending requests
+                self.ui_q.put(("worker_idle", self.device_id))
         self._log("Worker stopped")
 
 
@@ -3988,7 +4001,7 @@ class InjectDanaApp(QMainWindow):
         tg_prof_lay.addStretch()
 
         # Online indicator dot
-        self.lbl_tg_dot = QLabel("?")
+        self.lbl_tg_dot = QLabel("\u25cf")
         self.lbl_tg_dot.setStyleSheet("color: #585b70; font-size: 14pt; border: none; background: transparent;")
         tg_prof_lay.addWidget(self.lbl_tg_dot)
 
@@ -4052,7 +4065,7 @@ class InjectDanaApp(QMainWindow):
         grp_opt = QGroupBox("Options")
         opt_lay = QVBoxLayout(grp_opt)
         cfg_lay.addWidget(grp_opt)
-        self.chk_auto = QCheckBox("Auto Process (otomatis transfer tanpa konfirmasi � HATI-HATI!)")
+        self.chk_auto = QCheckBox("Auto Process (otomatis transfer tanpa konfirmasi - HATI-HATI!)")
         opt_lay.addWidget(self.chk_auto)
         row_b = QHBoxLayout()
         opt_lay.addLayout(row_b)
@@ -4271,10 +4284,10 @@ class InjectDanaApp(QMainWindow):
         self._bank_data = list(self.cfg.get("banks", []))
         self._refresh_bank_cfg_table()
         if self.cfg.get("session_string"):
-            self.lbl_tg_login.setText("? Session tersimpan (auto-login saat Start)")
+            self.lbl_tg_login.setText("[OK] Session tersimpan (auto-login saat Start)")
             self.lbl_tg_login.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 11pt;")
         else:
-            self.lbl_tg_login.setText("Belum login � Klik Start untuk scan QR")
+            self.lbl_tg_login.setText("Belum login - Klik Start untuk scan QR")
             self.lbl_tg_login.setStyleSheet("color: #f9e2af; font-size: 11pt;")
 
     def _save_gui_to_config(self):
@@ -4315,7 +4328,7 @@ class InjectDanaApp(QMainWindow):
             return
         self.cfg["session_string"] = ""
         save_config(self.cfg)
-        self.lbl_tg_login.setText("Logged out � Klik Start untuk scan QR")
+        self.lbl_tg_login.setText("Logged out - Klik Start untuk scan QR")
         self.lbl_tg_login.setStyleSheet("color: #f9e2af; font-size: 11pt;")
         # Reset sidebar profile
         self.lbl_tg_name.setText("Offline")
@@ -4523,7 +4536,7 @@ class InjectDanaApp(QMainWindow):
         
         # Update status
         active_count = len([w for w in self.bank_workers if w.is_alive()])
-        self.lbl_status.setText(f"Running � {active_count} bank(s)")
+        self.lbl_status.setText(f"Running \u25c6 {active_count} bank(s)")
         
         self._log(f"Bank dihapus dari runtime: {device_id[-8:]}")
 
@@ -4778,7 +4791,7 @@ class InjectDanaApp(QMainWindow):
 
         if skipped:
             self._log(f"Skipped (not connected): {', '.join(skipped)}")
-        self.lbl_status.setText(f"Running � {len(self.bank_workers)} bank(s)")
+        self.lbl_status.setText(f"Running \u25c6 {len(self.bank_workers)} bank(s)")
         self._log(f"Started {len(self.bank_workers)} bank worker(s)")
 
         # Start periodic ADB hotplug scanner (detect newly connected devices)
@@ -4823,7 +4836,7 @@ class InjectDanaApp(QMainWindow):
                 self.bank_workers.append(w)
                 w.start()
                 self._add_bank_to_table(did, bc.get("name", ""), bc.get("rekening", ""))
-                self.lbl_status.setText(f"Running � {len(self.bank_workers)} bank(s)")
+                self.lbl_status.setText(f"Running \u25c6 {len(self.bank_workers)} bank(s)")
                 # NOTE: Tidak langsung dispatch pending di sini.
                 # Worker akan notify 'worker_ready' setelah login+saldo selesai,
                 # lalu app dispatch pending requests ke worker yang sudah siap.
@@ -4867,27 +4880,47 @@ class InjectDanaApp(QMainWindow):
     #  REQUEST DISPATCH
     # ----------------------------------------
     def _find_best_bank(self, req):
-        """Find the best bank worker using round-robin across workers with enough saldo.
-        Ensures requests are distributed evenly across all available devices."""
-        alive = [w for w in self.bank_workers if w.is_alive()]
+        """Find the best IDLE bank worker using round-robin across workers with enough saldo.
+        HANYA return worker yang idle (tidak sedang proses transfer).
+        Return None jika semua worker sedang sibuk - request tetap Pending."""
+        # Ambil worker yang secara thread masih hidup + state ready
+        alive = [w for w in self.bank_workers if w.is_alive() and not w._stop.is_set() and w._ready]
         if not alive:
             return None
 
+        # HARD CHECK: verifikasi ADB real-time agar device yang baru disconnect tidak kepilih
+        connected_ready = []
+        for w in alive:
+            try:
+                if w._is_device_alive():
+                    connected_ready.append(w)
+                    continue
+
+                # Sinkronkan state jika ternyata sudah disconnect
+                w._ready = False
+                w.current_saldo = 0
+                self.ui_q.put(("update_bank", (w.device_id, "status", "Disconnected")))
+                self.ui_q.put(("update_bank", (w.device_id, "saldo", "-")))
+            except Exception:
+                # Jika check gagal, anggap tidak aman untuk dispatch
+                w._ready = False
+
+        if not connected_ready:
+            return None
+
         # Collect eligible workers (saldo cukup)
-        eligible = [w for w in alive if w.current_saldo >= req.nominal]
-        if not eligible:
-            # Fallback: workers with unknown saldo (0 = belum scrape)
-            eligible = [w for w in alive if w.current_saldo == 0]
+        eligible = [w for w in connected_ready if w.current_saldo >= req.nominal]
         if not eligible:
             return None
 
-        # Round-robin: pilih berdasarkan index, prioritaskan yang idle
+        # HANYA pilih worker yang IDLE (tidak ada job in-flight dan queue kosong)
         idle = [w for w in eligible if not w._inflight and w.job_q.qsize() == 0]
-        pool = idle if idle else eligible
+        if not idle:
+            return None  # Semua worker sibuk, jangan dispatch
 
-        # Round-robin across pool
-        idx = self._rr_index % len(pool)
-        chosen = pool[idx]
+        # Round-robin across idle pool
+        idx = self._rr_index % len(idle)
+        chosen = idle[idx]
         self._rr_index += 1
         return chosen.device_id
 
@@ -4905,29 +4938,9 @@ class InjectDanaApp(QMainWindow):
         
         device = self._find_best_bank(req)
         if not device:
-            # Fallback: pick worker with shortest queue that has saldo or unknown saldo
-            if self.bank_queues:
-                best_did = None
-                best_qsize = float('inf')
-                for w in self.bank_workers:
-                    if not w.is_alive():
-                        continue
-                    # Skip workers with known insufficient saldo
-                    if w.current_saldo > 0 and w.current_saldo < req.nominal:
-                        continue
-                    if w.job_q.qsize() < best_qsize:
-                        best_qsize = w.job_q.qsize()
-                        best_did = w.device_id
-                if not best_did:
-                    # All workers have known insufficient saldo � skip, don't dispatch
-                    self._log(f"[{req.request_id}] Semua bank saldo tidak cukup (butuh Rp {req.nominal:,}). Pending...")
-                    return
-                device = best_did
-            else:
-                self._log(f"[{req.request_id}] No bank available!")
-                req.status = "Gagal - No Bank"
-                self._update_request_in_table(rid=req.request_id, status="Gagal - No Bank")
-                return
+            # Tidak ada worker idle / saldo cukup - tetap Pending, akan di-dispatch saat worker selesai
+            self._log(f"[{req.request_id}] Semua worker sibuk / saldo tidak cukup. Tetap Pending, tunggu worker idle...")
+            return
         if device in self.bank_queues:
             self.bank_queues[device].put(req)
             bname = device
@@ -4953,7 +4966,7 @@ class InjectDanaApp(QMainWindow):
             return
 
         self._qr_dlg = QDialog(self)
-        self._qr_dlg.setWindowTitle("Login Telegram � Scan QR Code")
+        self._qr_dlg.setWindowTitle("Login Telegram - Scan QR Code")
         self._qr_dlg.setMinimumWidth(380)
         lay = QVBoxLayout(self._qr_dlg)
         lay.setSpacing(12)
@@ -5156,13 +5169,23 @@ class InjectDanaApp(QMainWindow):
                             bname = w.bank_name or device_id
                             break
                     self._log(f"[OK] {bname} siap terima job!")
-                    # Dispatch all pending requests (will be distributed across available workers)
-                    with self._request_lock:
-                        pending = [r for r in self.requests.values() if r.status == "Pending"]
-                    if pending and self.chk_auto.isChecked():
-                        self._log(f"Dispatching {len(pending)} pending request(s)...")
-                        for req in pending:
-                            self._dispatch_request(req)
+                    # Dispatch SATU pending request saja ke worker yang baru ready
+                    if self.chk_auto.isChecked():
+                        with self._request_lock:
+                            pending = [r for r in self.requests.values() if r.status == "Pending"]
+                        if pending:
+                            self._log(f"Worker ready, dispatch 1 dari {len(pending)} pending...")
+                            self._dispatch_request(pending[0])
+
+                elif cmd == "worker_idle":
+                    # Worker selesai proses 1 job, dispatch SATU pending request saja
+                    device_id = msg[1]
+                    if self.chk_auto.isChecked():
+                        with self._request_lock:
+                            pending = [r for r in self.requests.values() if r.status in ("Pending", "Gagal - Saldo")]
+                        if pending:
+                            self._log(f"Worker idle, dispatch 1 dari {len(pending)} pending...")
+                            self._dispatch_request(pending[0])
 
                 # ===== AUTO-UPDATE HANDLERS =====
                 elif cmd == "update_available":
@@ -5194,7 +5217,10 @@ class InjectDanaApp(QMainWindow):
                             if HAS_UPDATER:
                                 import sys
                                 updater.apply_update(result["path"], sys.executable)
+                                self.stop_all()
                                 self.close()
+                                QApplication.quit()
+                                sys.exit(0)
                     else:
                         error = result.get("error", "Unknown error")
                         self._log(f"[X] Download gagal: {error}")

@@ -1,0 +1,73 @@
+"""Deploy INJECT_DANA.exe to VPS with auto-password."""
+import subprocess, sys, os, json
+
+HOST = "178.128.87.151"
+USER = "znxbot"
+PASS = "znxbot"
+EXE_PATH = r"d:\tes2\dist2\INJECT_DANA.exe"
+REMOTE_DIR = "/var/www/releases"
+VERSION = "3.0.19"
+
+def run_cmd(cmd, input_text=None):
+    print(f">> {cmd}")
+    p = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = p.communicate(input=input_text.encode() if input_text else None, timeout=120)
+    print(out.decode(errors='replace'))
+    if err:
+        print(err.decode(errors='replace'))
+    return p.returncode
+
+# Try paramiko first
+try:
+    import paramiko
+    print("Using paramiko...")
+    
+    # Upload EXE
+    print(f"Uploading {EXE_PATH}...")
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(HOST, username=USER, password=PASS, timeout=30)
+    
+    sftp = ssh.open_sftp()
+    remote_tmp = "/tmp/INJECT_DANA.exe"
+    sftp.put(EXE_PATH, remote_tmp, callback=lambda sent, total: print(f"\r  {sent*100//total}%", end="", flush=True))
+    print("\n  Upload done!")
+    sftp.close()
+    
+    # Move to releases dir
+    print("Moving to releases dir...")
+    stdin, stdout, stderr = ssh.exec_command(f"echo {PASS} | sudo -S mv {remote_tmp} {REMOTE_DIR}/INJECT_DANA.exe")
+    print(stdout.read().decode(), stderr.read().decode())
+    
+    # Update releases.json via SFTP (write to /tmp then sudo mv)
+    print("Updating releases.json...")
+    releases_json = json.dumps({
+        "version": VERSION,
+        "download_url": f"http://{HOST}/releases/INJECT_DANA.exe",
+        "url": f"http://{HOST}/releases/INJECT_DANA.exe",
+        "changelog": f"v{VERSION}: Fix dispatch agar tidak kirim ke HP disconnect (real-time ADB check)."
+    }, ensure_ascii=False)
+    sftp2 = ssh.open_sftp()
+    with sftp2.file("/tmp/releases.json", "w") as f:
+        f.write(releases_json)
+    sftp2.close()
+    stdin, stdout, stderr = ssh.exec_command(f"echo {PASS} | sudo -S mv /tmp/releases.json {REMOTE_DIR}/releases.json")
+    print(stdout.read().decode(), stderr.read().decode())
+    
+    # Verify
+    print("Verifying...")
+    stdin, stdout, stderr = ssh.exec_command(f"cat {REMOTE_DIR}/releases.json")
+    content = stdout.read().decode()
+    print(f"releases.json: {content}")
+    
+    stdin, stdout, stderr = ssh.exec_command(f"ls -la {REMOTE_DIR}/INJECT_DANA.exe")
+    print(stdout.read().decode())
+    
+    ssh.close()
+    print("DEPLOY DONE!")
+    
+except ImportError:
+    print("paramiko not installed, installing...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "paramiko", "-q"])
+    print("Re-run this script.")
+    sys.exit(1)

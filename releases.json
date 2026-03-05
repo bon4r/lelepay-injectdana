@@ -1,7 +1,7 @@
 {
-    "version": "3.0.12",
-    "body": "## What's Changed\n- Fix uiautomator2 u2.jar not found in EXE\n- Fix emoji display\n- Add app icon\n- Standalone EXE\n- Auto-update",
-    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.12",
+    "version": "3.0.19",
+    "body": "## What's Changed\n- Fix dispatch agar request tidak terkirim ke HP yang sudah disconnect\n- Tambah real-time ADB health check sebelum round-robin dispatch",
+    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.19",
     "download_url": "http://178.128.87.151/releases/INJECT_DANA.exe",
     "download_size": 73960148,
     "asset_name": "INJECT_DANA.exe"
