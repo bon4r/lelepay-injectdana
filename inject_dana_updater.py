@@ -196,11 +196,12 @@ def download_update(update_info: dict, dest_folder: str = None,
                 dest_folder = tempfile.gettempdir()
         
         # Download dengan nama sementara dulu (supaya tidak corrupt kalau gagal)
-        temp_filename = f"INJECT_DANA_UPDATE_{update_info['version']}.exe.tmp"
-        final_filename = update_info.get("asset_name") or "INJECT_DANA.exe"
-        
+        # Selalu pakai nama canonical tanpa suffix versi untuk file update sementara.
+        temp_filename = "INJECT_DANA_UPDATE.tmp"
+        final_filename = "INJECT_DANA_UPDATE.exe"
+
         temp_path = os.path.join(dest_folder, temp_filename)
-        final_path = os.path.join(dest_folder, f"INJECT_DANA_v{update_info['version']}.exe")
+        final_path = os.path.join(dest_folder, final_filename)
         
         print(f"[Updater] Downloading to: {temp_path}")
         
@@ -243,6 +244,10 @@ def apply_update(exe_path: str, current_exe: str = None) -> bool:
     if not os.path.exists(exe_path):
         print(f"[Updater] Downloaded file not found: {exe_path}")
         return False
+
+    # Pakai nama target canonical agar setelah update nama file tetap INJECT_DANA.exe
+    target_dir = os.path.dirname(current_exe)
+    target_exe = os.path.join(target_dir, "INJECT_DANA.exe")
     
     try:
         log_path = os.path.join(tempfile.gettempdir(), "inject_dana_update.log")
@@ -251,7 +256,7 @@ def apply_update(exe_path: str, current_exe: str = None) -> bool:
         batch_content = f'''@echo off
 echo INJECT DANA - Installing Update... > "{log_path}"
 echo Source: {exe_path} >> "{log_path}"
-echo Target: {current_exe} >> "{log_path}"
+echo Target: {target_exe} >> "{log_path}"
 echo.
 
 echo Waiting for app to close...
@@ -269,11 +274,11 @@ if "%ERRORLEVEL%"=="0" (
 echo App closed, copying new version... >> "{log_path}"
 echo Copying new version...
 
-REM Try copy with xcopy for better reliability
-xcopy /Y /F "{exe_path}" "{current_exe}*"
+copy /Y "{exe_path}" "{target_exe}"
 if errorlevel 1 (
-    echo XCOPY failed, trying copy... >> "{log_path}"
-    copy /Y "{exe_path}" "{current_exe}"
+    echo [ERROR] Copy failed, retrying... >> "{log_path}"
+    timeout /t 2 /nobreak >nul
+    copy /Y "{exe_path}" "{target_exe}"
     if errorlevel 1 (
         echo [ERROR] Failed to copy new version! >> "{log_path}"
         echo [ERROR] Failed to copy new version!
@@ -285,12 +290,15 @@ if errorlevel 1 (
 echo Copy successful! >> "{log_path}"
 echo Starting updated app... >> "{log_path}"
 echo Starting updated app...
-start "" "{current_exe}"
+timeout /t 1 /nobreak >nul
+start "" "{target_exe}"
 
-echo.
 echo Update complete! >> "{log_path}"
 echo Update complete!
 timeout /t 2 /nobreak >nul
+
+REM Cleanup downloaded file
+del /F /Q "{exe_path}" >nul 2>&1
 
 REM Cleanup - delete self
 del "%~f0"

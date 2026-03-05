@@ -1,7 +1,7 @@
 {
-    "version": "3.0.19",
-    "body": "## What's Changed\n- Fix dispatch agar request tidak terkirim ke HP yang sudah disconnect\n- Tambah real-time ADB health check sebelum round-robin dispatch",
-    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.19",
+    "version": "3.0.20",
+    "body": "## What's Changed\n- Tambah tab UPDATE di sebelah CONFIG (cek versi + changelog + check update manual)\n- Installer update sekarang mempertahankan nama file INJECT_DANA.exe (tanpa suffix versi)",
+    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.20",
     "download_url": "http://178.128.87.151/releases/INJECT_DANA.exe",
     "download_size": 73960148,
     "asset_name": "INJECT_DANA.exe"

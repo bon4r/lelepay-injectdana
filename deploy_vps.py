@@ -6,7 +6,7 @@ USER = "znxbot"
 PASS = "znxbot"
 EXE_PATH = r"d:\tes2\dist2\INJECT_DANA.exe"
 REMOTE_DIR = "/var/www/releases"
-VERSION = "3.0.19"
+VERSION = "3.0.20"
 
 def run_cmd(cmd, input_text=None):
     print(f">> {cmd}")
@@ -45,7 +45,7 @@ try:
         "version": VERSION,
         "download_url": f"http://{HOST}/releases/INJECT_DANA.exe",
         "url": f"http://{HOST}/releases/INJECT_DANA.exe",
-        "changelog": f"v{VERSION}: Fix dispatch agar tidak kirim ke HP disconnect (real-time ADB check)."
+        "changelog": f"v{VERSION}: Tambah tab UPDATE + changelog, dan update install ke nama tetap INJECT_DANA.exe."
     }, ensure_ascii=False)
     sftp2 = ssh.open_sftp()
     with sftp2.file("/tmp/releases.json", "w") as f:

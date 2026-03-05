@@ -5,6 +5,10 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.20: Update tab + nama EXE tetap
+    - Tambah tab UPDATE (cek versi + changelog + tombol check/download)
+    - Auto-update install ke nama canonical INJECT_DANA.exe
+    - Tidak lagi output nama versi di file update hasil download
 v3.0.19: Fix dispatch ke HP disconnect
     - Dispatcher skip worker yang ADB-nya sudah putus (real-time check)
     - Status bank otomatis jadi Disconnected dan saldo reset
@@ -166,7 +170,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.19"  # Current app version for update check
+APP_VERSION = "3.0.20"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -3744,6 +3748,7 @@ class InjectDanaApp(QMainWindow):
         self._request_lock = threading.Lock()
         self._rr_index = 0  # Round-robin index for dispatch
         self._camera_icon = _make_camera_icon()
+        self._latest_update_info: Optional[dict] = None
 
         self._build_gui()
         self._load_config_to_gui()
@@ -3767,9 +3772,72 @@ class InjectDanaApp(QMainWindow):
             # Queue UI update to show dialog on main thread
             self.ui_q.put(("update_available", update_info))
         
+        # Update status on Update tab
+        if hasattr(self, "lbl_update_status"):
+            self.lbl_update_status.setText("Checking update...")
+        
         # Start background check
         checker = updater.UpdateChecker(APP_VERSION, callback=on_update_available)
         checker.start()
+
+    def _check_for_updates_manual(self):
+        """Manual check update from Update tab."""
+        if not HAS_UPDATER:
+            self._log("Updater module tidak tersedia.")
+            return
+
+        self._log("Manual check update...")
+
+        def _run():
+            try:
+                info = updater.check_for_update(APP_VERSION)
+                if info:
+                    self.ui_q.put(("update_available", info))
+                else:
+                    self.ui_q.put(("update_check_none", None))
+            except Exception as e:
+                self.ui_q.put(("update_check_error", str(e)))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _render_update_info(self, update_info: Optional[dict]):
+        """Render update information to UPDATE tab."""
+        if not hasattr(self, "lbl_latest_version"):
+            return
+
+        self.lbl_current_version.setText(f"Current: v{APP_VERSION}")
+
+        if not update_info:
+            self.lbl_latest_version.setText("Latest: -")
+            self.lbl_update_status.setText("Belum ada info update")
+            self.txt_update_changelog.setPlainText("Belum ada changelog.")
+            self.btn_update_download.setEnabled(False)
+            self.btn_update_github.setEnabled(False)
+            return
+
+        self._latest_update_info = update_info
+        version = str(update_info.get("version", "?")).lstrip("v")
+        body = update_info.get("body", "") or update_info.get("changelog", "")
+        html_url = update_info.get("html_url", "")
+        has_download = bool(update_info.get("download_url"))
+
+        self.lbl_latest_version.setText(f"Latest: v{version}")
+        self.lbl_update_status.setText("Update tersedia" if has_download else "Update info tersedia")
+        self.txt_update_changelog.setPlainText(body if body else "(Changelog kosong)")
+        self.btn_update_download.setEnabled(has_download)
+        self.btn_update_github.setEnabled(bool(html_url))
+
+    def _open_latest_update_page(self):
+        if not self._latest_update_info:
+            return
+        url = self._latest_update_info.get("html_url", "")
+        if url:
+            import webbrowser
+            webbrowser.open(url)
+
+    def _download_latest_update(self):
+        if self._latest_update_info:
+            self._download_and_install_update(self._latest_update_info)
 
     def _show_update_dialog(self, update_info: dict):
         """Show update available dialog."""
@@ -3863,8 +3931,10 @@ class InjectDanaApp(QMainWindow):
         root_lay.addWidget(tabs)
         page_main = QWidget()
         page_config = QWidget()
+        page_update = QWidget()
         tabs.addTab(page_main, "  MAIN  ")
         tabs.addTab(page_config, "  CONFIG  ")
+        tabs.addTab(page_update, "  UPDATE  ")
 
         # -- MAIN TAB --
         main_lay = QHBoxLayout(page_main)
@@ -4084,6 +4154,49 @@ class InjectDanaApp(QMainWindow):
         btn_save_cfg.setObjectName("saveBtn")
         btn_save_cfg.clicked.connect(self._save_gui_to_config)
         cfg_lay.addWidget(btn_save_cfg, alignment=Qt.AlignCenter)
+
+        # -- UPDATE TAB --
+        upd_lay = QVBoxLayout(page_update)
+        upd_lay.setContentsMargins(16, 16, 16, 16)
+
+        grp_upd_info = QGroupBox("Update Version")
+        upd_info_lay = QVBoxLayout(grp_upd_info)
+        upd_lay.addWidget(grp_upd_info)
+
+        self.lbl_current_version = QLabel(f"Current: v{APP_VERSION}")
+        self.lbl_latest_version = QLabel("Latest: -")
+        self.lbl_update_status = QLabel("Idle")
+        self.lbl_update_status.setStyleSheet("color: #a6adc8;")
+        upd_info_lay.addWidget(self.lbl_current_version)
+        upd_info_lay.addWidget(self.lbl_latest_version)
+        upd_info_lay.addWidget(self.lbl_update_status)
+
+        upd_btn_row = QHBoxLayout()
+        self.btn_update_check = QPushButton("Check Update")
+        self.btn_update_check.clicked.connect(self._check_for_updates_manual)
+        upd_btn_row.addWidget(self.btn_update_check)
+
+        self.btn_update_download = QPushButton("Download & Install")
+        self.btn_update_download.setEnabled(False)
+        self.btn_update_download.clicked.connect(self._download_latest_update)
+        upd_btn_row.addWidget(self.btn_update_download)
+
+        self.btn_update_github = QPushButton("Lihat di GitHub")
+        self.btn_update_github.setEnabled(False)
+        self.btn_update_github.clicked.connect(self._open_latest_update_page)
+        upd_btn_row.addWidget(self.btn_update_github)
+        upd_btn_row.addStretch()
+        upd_info_lay.addLayout(upd_btn_row)
+
+        grp_changelog = QGroupBox("Changelog")
+        changelog_lay = QVBoxLayout(grp_changelog)
+        self.txt_update_changelog = QTextEdit()
+        self.txt_update_changelog.setReadOnly(True)
+        self.txt_update_changelog.setPlaceholderText("Changelog update akan tampil di sini...")
+        changelog_lay.addWidget(self.txt_update_changelog)
+        upd_lay.addWidget(grp_changelog, stretch=1)
+
+        self._render_update_info(None)
 
         # Internal: store bank data list (mirrors tbl_bank_cfg)
         self._bank_data: List[dict] = []
@@ -5193,7 +5306,19 @@ class InjectDanaApp(QMainWindow):
                     ver = update_info.get('version', '?')
                     ver = ver.lstrip('v') if ver.startswith('v') else ver
                     self._log(f"[!] Update tersedia: v{ver}")
+                    self._render_update_info(update_info)
                     self._show_update_dialog(update_info)
+
+                elif cmd == "update_check_none":
+                    self._log("[OK] Tidak ada update baru.")
+                    if hasattr(self, "lbl_update_status"):
+                        self.lbl_update_status.setText("Sudah versi terbaru")
+
+                elif cmd == "update_check_error":
+                    err = msg[1]
+                    self._log(f"[X] Check update gagal: {err}")
+                    if hasattr(self, "lbl_update_status"):
+                        self.lbl_update_status.setText("Check update gagal")
 
                 elif cmd == "update_progress":
                     pct = msg[1]
