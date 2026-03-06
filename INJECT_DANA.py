@@ -3770,6 +3770,7 @@ class InjectDanaApp(QMainWindow):
         self._rr_index = 0  # Round-robin index for dispatch
         self._camera_icon = _make_camera_icon()
         self._latest_update_info: Optional[dict] = None
+        self._update_exit_in_progress = False
 
         self._build_gui()
         self._load_config_to_gui()
@@ -3971,6 +3972,54 @@ class InjectDanaApp(QMainWindow):
         # Store progress dialog for queue handler to update
         self._update_progress_dlg = progress
         progress.show()
+
+    def _exit_for_update(self):
+        """Exit app aggressively after updater batch is spawned.
+
+        Reason: normal Qt/thread shutdown can hang on some machines, which prevents
+        updater from replacing the running EXE and restarting.
+        """
+        self._update_exit_in_progress = True
+        self._log("[UPDATER] Menutup aplikasi untuk install update...")
+
+        try:
+            if hasattr(self, '_timer') and self._timer:
+                self._timer.stop()
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, '_hotplug_timer') and self._hotplug_timer:
+                self._hotplug_timer.stop()
+        except Exception:
+            pass
+
+        try:
+            if self.tg_worker:
+                self.tg_worker.stop()
+        except Exception:
+            pass
+
+        try:
+            for w in list(self.bank_workers):
+                try:
+                    w.stop()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        try:
+            self.hide()
+        except Exception:
+            pass
+
+        app = QApplication.instance()
+        if app:
+            QTimer.singleShot(50, app.quit)
+
+        # Hard-exit fallback: ensure process benar-benar mati agar file EXE bisa dioverwrite.
+        QTimer.singleShot(1200, lambda: os._exit(0))
 
     # ----------------------------------------
     #  BUILD GUI
@@ -5400,10 +5449,7 @@ class InjectDanaApp(QMainWindow):
                                 import sys
                                 ok = updater.apply_update(result["path"], sys.executable)
                                 if ok:
-                                    self.stop_all()
-                                    self.close()
-                                    QApplication.quit()
-                                    sys.exit(0)
+                                    self._exit_for_update()
                                 else:
                                     self._log("[X] Apply update gagal, app tidak ditutup.")
                                     QMessageBox.warning(
@@ -5421,6 +5467,9 @@ class InjectDanaApp(QMainWindow):
             print(f"[UI_Q] {e}")
 
     def closeEvent(self, event):
+        if getattr(self, "_update_exit_in_progress", False):
+            event.accept()
+            return
         self.stop_all()
         event.accept()
 
