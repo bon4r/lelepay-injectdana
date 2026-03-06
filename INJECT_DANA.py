@@ -5,6 +5,10 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.30: Fix python311.dll load error pada TEMP non-standard
+    - runtime_tmpdir dialihkan ke %LOCALAPPDATA%\Temp (C: drive, selalu ada)
+    - Batch updater set TEMP/TMP ke LOCALAPPDATA sebelum launch
+    - Cleanup stale _MEI* folders di TEMP sebelum start
 v3.0.29: Fix updater launch app 3x + cleanup runtime_cache lama
     - Batch updater kini launch app SEKALI saja (bukan Try 1+2+3)
     - Fallback PowerShell hanya dipanggil jika start gagal
@@ -203,7 +207,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.29"  # Current app version for update check
+APP_VERSION = "3.0.30"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0

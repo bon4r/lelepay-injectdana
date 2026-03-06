@@ -334,8 +334,17 @@ if exist "{target_dir}\\runtime_cache" (
     rmdir /S /Q "{target_dir}\\runtime_cache" >nul 2>&1
 )
 
+REM Cleanup old _MEI* folders in TEMP that may be stale from crashed runs
+for /D %%d in ("%TEMP%\\_MEI*") do (
+    rmdir /S /Q "%%d" >nul 2>&1
+)
+
 REM Set working directory to app folder
 cd /d "{target_dir}"
+
+REM Force TEMP to standard Windows user temp (avoids non-standard TEMP paths)
+set "TEMP=%LOCALAPPDATA%\\Temp"
+set "TMP=%LOCALAPPDATA%\\Temp"
 
 REM Launch app ONCE only (start /D is reliable on all Windows)
 start "" /D "{target_dir}" "{target_exe}"
