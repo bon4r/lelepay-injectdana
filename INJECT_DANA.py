@@ -5,6 +5,9 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.24: Check Update selalu tampilkan changelog terbaru
+    - Tombol Check Update kini fetch changelog latest dulu lalu cek versi
+    - Popup update pakai fallback field 'changelog' jika 'body' kosong
 v3.0.23: Update in-place (tanpa file app baru)
     - File update didownload ke TEMP, bukan folder app
     - Installer update overwrite EXE yang sedang dipakai (in-place)
@@ -180,7 +183,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.23"  # Current app version for update check
+APP_VERSION = "3.0.24"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -3810,16 +3813,21 @@ class InjectDanaApp(QMainWindow):
             return
 
         self._log("Manual check update...")
+        if hasattr(self, "lbl_update_status"):
+            self.lbl_update_status.setText("Checking update...")
 
         def _run():
             try:
+                # 1) Selalu ambil info release terbaru untuk isi changelog panel UPDATE
+                latest = updater.get_latest_release_info()
+                if latest:
+                    self.ui_q.put(("update_latest_info", latest))
+
+                # 2) Lalu cek apakah ada versi lebih baru
                 info = updater.check_for_update(APP_VERSION)
                 if info:
                     self.ui_q.put(("update_available", info))
                 else:
-                    latest = updater.get_latest_release_info()
-                    if latest:
-                        self.ui_q.put(("update_latest_info", latest))
                     self.ui_q.put(("update_check_none", None))
             except Exception as e:
                 self.ui_q.put(("update_check_error", str(e)))
@@ -3883,7 +3891,7 @@ class InjectDanaApp(QMainWindow):
         
         version = update_info.get("version", "?")
         current = update_info.get("current", APP_VERSION)
-        body = update_info.get("body", "")
+        body = update_info.get("body", "") or update_info.get("changelog", "")
         download_url = update_info.get("download_url")
         html_url = update_info.get("html_url", "")
         

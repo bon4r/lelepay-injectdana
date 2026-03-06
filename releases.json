@@ -1,7 +1,8 @@
 {
-    "version": "3.0.23",
-    "body": "## What's Changed\n- Update installer sekarang in-place: tidak bikin file app baru di folder user\n- File update didownload ke TEMP, lalu overwrite EXE aktif\n- Changelog VPS tetap terbaca walau pakai key 'changelog'",
-    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.23",
+    "version": "3.0.24",
+    "body": "## What's Changed\n- Tombol Check Update sekarang selalu menampilkan changelog versi terbaru\n- Popup update pakai fallback field changelog jika body kosong\n- Perbaikan konsistensi info update di tab UPDATE",
+    "changelog": "v3.0.24: Check Update kini selalu menampilkan changelog versi terbaru.",
+    "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.24",
     "download_url": "http://178.128.87.151/releases/INJECT_DANA.exe",
     "download_size": 73960148,
     "asset_name": "INJECT_DANA.exe"
