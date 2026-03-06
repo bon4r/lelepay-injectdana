@@ -12,6 +12,7 @@ import threading
 import tempfile
 import subprocess
 import re
+import time
 from typing import Optional, Tuple, Callable
 
 # ===== Konfigurasi GitHub =====
@@ -286,7 +287,8 @@ def apply_update(exe_path: str, current_exe: str = None) -> bool:
     target_exe = current_exe
     
     try:
-        log_path = os.path.join(tempfile.gettempdir(), "inject_dana_update.log")
+        stamp = f"{int(time.time())}_{os.getpid()}"
+        log_path = os.path.join(tempfile.gettempdir(), f"inject_dana_update_{stamp}.log")
         
         # Create update batch script with better error handling
         batch_content = f'''@echo off
@@ -347,11 +349,15 @@ timeout /t 2 /nobreak >nul
 REM Cleanup downloaded file
 del /F /Q "{exe_path}" >nul 2>&1
 
+REM Cleanup leftover updater exe in app folder (legacy behavior)
+del /F /Q "{target_dir}\INJECT_DANA_UPDATE.exe" >nul 2>&1
+del /F /Q "{target_dir}\INJECT_DANA_UPDATE_*.exe" >nul 2>&1
+
 REM Cleanup - delete self
 del "%~f0"
 '''
         
-        batch_path = os.path.join(tempfile.gettempdir(), "inject_dana_update.bat")
+        batch_path = os.path.join(tempfile.gettempdir(), f"inject_dana_update_{stamp}.bat")
         with open(batch_path, 'w', encoding='utf-8') as f:
             f.write(batch_content)
         

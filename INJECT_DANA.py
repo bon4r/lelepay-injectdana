@@ -5,6 +5,10 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.25: Fix restart flow agar app tidak mati sia-sia
+    - App hanya close jika apply_update berhasil
+    - Updater pakai batch/log unik per run (hindari tabrakan)
+    - Cleanup legacy file INJECT_DANA_UPDATE*.exe di folder app
 v3.0.24: Check Update selalu tampilkan changelog terbaru
     - Tombol Check Update kini fetch changelog latest dulu lalu cek versi
     - Popup update pakai fallback field 'changelog' jika 'body' kosong
@@ -183,7 +187,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.24"  # Current app version for update check
+APP_VERSION = "3.0.25"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -5390,11 +5394,20 @@ class InjectDanaApp(QMainWindow):
                         if reply == QMessageBox.Yes:
                             if HAS_UPDATER:
                                 import sys
-                                updater.apply_update(result["path"], sys.executable)
-                                self.stop_all()
-                                self.close()
-                                QApplication.quit()
-                                sys.exit(0)
+                                ok = updater.apply_update(result["path"], sys.executable)
+                                if ok:
+                                    self.stop_all()
+                                    self.close()
+                                    QApplication.quit()
+                                    sys.exit(0)
+                                else:
+                                    self._log("[X] Apply update gagal, app tidak ditutup.")
+                                    QMessageBox.warning(
+                                        self,
+                                        "Install Update Failed",
+                                        "Gagal menjalankan installer update otomatis.\n"
+                                        "Aplikasi tetap berjalan. Coba lagi dari tombol Download_Install."
+                                    )
                     else:
                         error = result.get("error", "Unknown error")
                         self._log(f"[X] Download gagal: {error}")

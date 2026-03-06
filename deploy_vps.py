@@ -6,7 +6,7 @@ USER = "znxbot"
 PASS = "znxbot"
 EXE_PATH = r"d:\tes2\dist2\INJECT_DANA.exe"
 REMOTE_DIR = "/var/www/releases"
-VERSION = "3.0.24"
+VERSION = "3.0.25"
 
 def run_cmd(cmd, input_text=None):
     print(f">> {cmd}")
@@ -41,7 +41,7 @@ try:
     
     # Update releases.json via SFTP (write to /tmp then sudo mv)
     print("Updating releases.json...")
-    changelog_text = f"v{VERSION}: Check Update kini selalu menampilkan changelog versi terbaru."
+    changelog_text = f"v{VERSION}: Fix restart flow (close only on apply success) + updater script unik per run."
 
     releases_json = json.dumps({
         "version": VERSION,
