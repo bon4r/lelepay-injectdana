@@ -328,6 +328,9 @@ echo Starting updated app... >> "{log_path}"
 echo Starting updated app...
 timeout /t 1 /nobreak >nul
 
+REM Set working directory to app folder (critical for runtime_tmpdir)
+cd /d "{target_dir}"
+
 REM Try 1: start with explicit working directory
 start "" /D "{target_dir}" "{target_exe}"
 timeout /t 1 /nobreak >nul

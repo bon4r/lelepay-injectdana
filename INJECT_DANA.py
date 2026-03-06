@@ -5,14 +5,18 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
-v3.0.26: Fix python311.dll load error di updater result
-    - Build onefile tanpa UPX (hindari false-positive/korup ekstraksi DLL)
-    - Runtime extract dipindah ke folder app (runtime_cache), bukan %TEMP% _MEI random
-    - Stabilkan startup setelah update di beberapa mesin Windows
+v3.0.28: Fix runtime_cache access denied saat launch dari updater
+    - Hapus runtime_tmpdir relatif (pakai default temp, aman karena upx=False)
+    - Updater batch kini cd /d ke folder app sebelum launch
+    - Cegah "C:\Windows\system32\runtime_cache" error
 v3.0.27: Fix restart updater agar app selalu benar-benar restart
     - Tambah update-exit mode khusus saat install update
     - Graceful quit + fallback hard-exit (os._exit) jika proses masih menggantung
     - Cegah closeEvent normal mengganggu flow restart updater
+v3.0.26: Fix python311.dll load error di updater result
+    - Build onefile tanpa UPX (hindari false-positive/korup ekstraksi DLL)
+    - Runtime extract dipindah ke folder app (runtime_cache), bukan %TEMP% _MEI random
+    - Stabilkan startup setelah update di beberapa mesin Windows
 v3.0.25: Fix restart flow agar app tidak mati sia-sia
     - App hanya close jika apply_update berhasil
     - Updater pakai batch/log unik per run (hindari tabrakan)
@@ -195,7 +199,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.27"  # Current app version for update check
+APP_VERSION = "3.0.28"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
