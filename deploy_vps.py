@@ -8,6 +8,17 @@ EXE_PATH = r"d:\tes2\dist2\INJECT_DANA.exe"
 REMOTE_DIR = "/var/www/releases"
 VERSION = "3.0.25"
 
+CHANGELOG_HISTORY_TEXT = """\
+v3.0.25: Fix restart flow (close only on apply success) + updater script unik per run.
+v3.0.24: Check Update kini selalu menampilkan changelog versi terbaru.
+v3.0.23: Update in-place tanpa bikin file app baru + fix fallback changelog.
+v3.0.22: Fix restart update lebih stabil (copy retry loop + fallback launch).
+v3.0.21: Fix auto-restart setelah install update + fallback launch lebih robust.
+v3.0.20: Tambah tab UPDATE + changelog, dan update install ke nama tetap INJECT_DANA.exe.
+"""
+
+CHANGELOG_HISTORY_MD = """## Changelog\n- v3.0.25: Fix restart flow (close only on apply success) + updater script unik per run.\n- v3.0.24: Check Update kini selalu menampilkan changelog versi terbaru.\n- v3.0.23: Update in-place tanpa bikin file app baru + fix fallback changelog.\n- v3.0.22: Fix restart update lebih stabil (copy retry loop + fallback launch).\n- v3.0.21: Fix auto-restart setelah install update + fallback launch lebih robust.\n- v3.0.20: Tambah tab UPDATE + changelog, dan update install ke nama tetap INJECT_DANA.exe."""
+
 def run_cmd(cmd, input_text=None):
     print(f">> {cmd}")
     p = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -41,13 +52,13 @@ try:
     
     # Update releases.json via SFTP (write to /tmp then sudo mv)
     print("Updating releases.json...")
-    changelog_text = f"v{VERSION}: Fix restart flow (close only on apply success) + updater script unik per run."
+    changelog_text = CHANGELOG_HISTORY_TEXT
 
     releases_json = json.dumps({
         "version": VERSION,
         "download_url": f"http://{HOST}/releases/INJECT_DANA.exe",
         "url": f"http://{HOST}/releases/INJECT_DANA.exe",
-        "body": changelog_text,
+        "body": CHANGELOG_HISTORY_MD,
         "changelog": changelog_text,
         "asset_name": "INJECT_DANA.exe"
     }, ensure_ascii=False)

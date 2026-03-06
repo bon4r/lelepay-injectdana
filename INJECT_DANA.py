@@ -3909,8 +3909,8 @@ class InjectDanaApp(QMainWindow):
         
         if body:
             # Truncate body if too long
-            if len(body) > 500:
-                body = body[:500] + "..."
+            if len(body) > 3000:
+                body = body[:3000] + "..."
             msg.setDetailedText(body)
         
         if download_url:

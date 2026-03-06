@@ -1,7 +1,7 @@
 {
     "version": "3.0.25",
-    "body": "## What's Changed\n- App hanya ditutup jika apply update berhasil\n- Updater pakai batch/log unik per run (hindari tabrakan restart)\n- Cleanup file legacy INJECT_DANA_UPDATE*.exe",
-    "changelog": "v3.0.25: Fix restart flow + updater unik per run.",
+    "body": "## Changelog\n- v3.0.25: Fix restart flow (close only on apply success) + updater script unik per run.\n- v3.0.24: Check Update kini selalu menampilkan changelog versi terbaru.\n- v3.0.23: Update in-place tanpa bikin file app baru + fix fallback changelog.\n- v3.0.22: Fix restart update lebih stabil (copy retry loop + fallback launch).\n- v3.0.21: Fix auto-restart setelah install update + fallback launch lebih robust.\n- v3.0.20: Tambah tab UPDATE + changelog, dan update install ke nama tetap INJECT_DANA.exe.",
+    "changelog": "v3.0.25: Fix restart flow (close only on apply success) + updater script unik per run.\nv3.0.24: Check Update kini selalu menampilkan changelog versi terbaru.\nv3.0.23: Update in-place tanpa bikin file app baru + fix fallback changelog.\nv3.0.22: Fix restart update lebih stabil (copy retry loop + fallback launch).\nv3.0.21: Fix auto-restart setelah install update + fallback launch lebih robust.\nv3.0.20: Tambah tab UPDATE + changelog, dan update install ke nama tetap INJECT_DANA.exe.",
     "html_url": "https://github.com/bon4r/lelepay-injectdana/releases/tag/v3.0.25",
     "download_url": "http://178.128.87.151/releases/INJECT_DANA.exe",
     "download_size": 73960148,
