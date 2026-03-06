@@ -328,21 +328,25 @@ echo Starting updated app... >> "{log_path}"
 echo Starting updated app...
 timeout /t 1 /nobreak >nul
 
-REM Set working directory to app folder (critical for runtime_tmpdir)
-cd /d "{target_dir}"
-
-REM Try 1: start with explicit working directory
-start "" /D "{target_dir}" "{target_exe}"
-timeout /t 1 /nobreak >nul
-
-REM Try 2: PowerShell Start-Process fallback
-if exist "{target_exe}" (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "try {{ Start-Process -FilePath '{target_exe}' -WorkingDirectory '{target_dir}' }} catch {{ exit 1 }}"
+REM Cleanup stale runtime_cache from previous versions (v3.0.26 and earlier)
+if exist "{target_dir}\\runtime_cache" (
+    echo Removing stale runtime_cache folder... >> "{log_path}"
+    rmdir /S /Q "{target_dir}\\runtime_cache" >nul 2>&1
 )
 
-REM Try 3: explorer fallback (some environments block start)
-if exist "{target_exe}" (
-    explorer "{target_exe}"
+REM Set working directory to app folder
+cd /d "{target_dir}"
+
+REM Launch app ONCE only (start /D is reliable on all Windows)
+start "" /D "{target_dir}" "{target_exe}"
+echo App launched via start >> "{log_path}"
+
+REM Verify process started; if not, try PowerShell fallback
+timeout /t 3 /nobreak >nul
+tasklist /FI "IMAGENAME eq INJECT_DANA.exe" 2>nul | find /I "INJECT_DANA.exe" >nul
+if errorlevel 1 (
+    echo start failed, trying PowerShell fallback... >> "{log_path}"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try {{ Start-Process -FilePath '{target_exe}' -WorkingDirectory '{target_dir}' }} catch {{ exit 1 }}"
 )
 
 echo Update complete! >> "{log_path}"
@@ -353,8 +357,8 @@ REM Cleanup downloaded file
 del /F /Q "{exe_path}" >nul 2>&1
 
 REM Cleanup leftover updater exe in app folder (legacy behavior)
-del /F /Q "{target_dir}\INJECT_DANA_UPDATE.exe" >nul 2>&1
-del /F /Q "{target_dir}\INJECT_DANA_UPDATE_*.exe" >nul 2>&1
+del /F /Q "{target_dir}\\INJECT_DANA_UPDATE.exe" >nul 2>&1
+del /F /Q "{target_dir}\\INJECT_DANA_UPDATE_*.exe" >nul 2>&1
 
 REM Cleanup - delete self
 del "%~f0"

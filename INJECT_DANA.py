@@ -5,6 +5,10 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.29: Fix updater launch app 3x + cleanup runtime_cache lama
+    - Batch updater kini launch app SEKALI saja (bukan Try 1+2+3)
+    - Fallback PowerShell hanya dipanggil jika start gagal
+    - Hapus folder runtime_cache lama saat update dan startup
 v3.0.28: Fix runtime_cache access denied saat launch dari updater
     - Hapus runtime_tmpdir relatif (pakai default temp, aman karena upx=False)
     - Updater batch kini cd /d ke folder app sebelum launch
@@ -199,7 +203,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.28"  # Current app version for update check
+APP_VERSION = "3.0.29"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
@@ -208,6 +212,13 @@ SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
 if getattr(sys, 'frozen', False):
     # Running as bundled EXE - use exe location for config files
     SCRIPT_DIR = os.path.dirname(sys.executable)
+    # Cleanup stale runtime_cache from v3.0.26 (used relative runtime_tmpdir)
+    _stale_rc = os.path.join(SCRIPT_DIR, 'runtime_cache')
+    if os.path.isdir(_stale_rc):
+        try:
+            shutil.rmtree(_stale_rc, ignore_errors=True)
+        except Exception:
+            pass
     # Find Python executable for subprocess calls (search common locations)
     _python_paths = [
         shutil.which("python"),
