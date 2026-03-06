@@ -105,7 +105,7 @@ def _check_vps_for_update(current_version: str) -> Optional[dict]:
             return {
                 "version": latest_version,
                 "current": current_version,
-                "body": data.get("body", ""),
+                "body": data.get("body") or data.get("changelog") or "",
                 "html_url": data.get("html_url", ""),
                 "download_url": data.get("download_url"),
                 "download_size": data.get("download_size", 0),
@@ -228,18 +228,13 @@ def download_update(update_info: dict, dest_folder: str = None,
     
     try:
         if not dest_folder:
-            # Download ke folder yang sama dengan EXE saat ini
-            current_exe = sys.executable
-            if current_exe.lower().endswith('.exe'):
-                dest_folder = os.path.dirname(current_exe)
-            else:
-                # Running from source, use temp
-                dest_folder = tempfile.gettempdir()
+            # SELALU download ke TEMP agar tidak membuat file baru di folder app user
+            dest_folder = tempfile.gettempdir()
         
         # Download dengan nama sementara dulu (supaya tidak corrupt kalau gagal)
         # Selalu pakai nama canonical tanpa suffix versi untuk file update sementara.
-        temp_filename = "INJECT_DANA_UPDATE.tmp"
-        final_filename = "INJECT_DANA_UPDATE.exe"
+        temp_filename = f"INJECT_DANA_UPDATE_{os.getpid()}.tmp"
+        final_filename = f"INJECT_DANA_UPDATE_{os.getpid()}.exe"
 
         temp_path = os.path.join(dest_folder, temp_filename)
         final_path = os.path.join(dest_folder, final_filename)
@@ -286,9 +281,9 @@ def apply_update(exe_path: str, current_exe: str = None) -> bool:
         print(f"[Updater] Downloaded file not found: {exe_path}")
         return False
 
-    # Pakai nama target canonical agar setelah update nama file tetap INJECT_DANA.exe
+    # Overwrite file executable yang sedang dipakai (in-place), tanpa bikin file app baru
     target_dir = os.path.dirname(current_exe)
-    target_exe = os.path.join(target_dir, "INJECT_DANA.exe")
+    target_exe = current_exe
     
     try:
         log_path = os.path.join(tempfile.gettempdir(), "inject_dana_update.log")
@@ -300,32 +295,30 @@ echo Source: {exe_path} >> "{log_path}"
 echo Target: {target_exe} >> "{log_path}"
 echo.
 
-echo Waiting for app to close...
 echo Waiting for app to close... >> "{log_path}"
-timeout /t 3 /nobreak >nul
+timeout /t 2 /nobreak >nul
 
-:WAIT_LOOP
-tasklist /FI "IMAGENAME eq {os.path.basename(current_exe)}" 2>NUL | find /I /N "{os.path.basename(current_exe)}" >NUL
-if "%ERRORLEVEL%"=="0" (
-    echo App still running, waiting... >> "{log_path}"
-    timeout /t 2 /nobreak >nul
-    goto WAIT_LOOP
-)
-
-echo App closed, copying new version... >> "{log_path}"
+echo Copying new version with retry... >> "{log_path}"
 echo Copying new version...
 
-copy /Y "{exe_path}" "{target_exe}"
-if errorlevel 1 (
-    echo [ERROR] Copy failed, retrying... >> "{log_path}"
-    timeout /t 2 /nobreak >nul
-    copy /Y "{exe_path}" "{target_exe}"
-    if errorlevel 1 (
-        echo [ERROR] Failed to copy new version! >> "{log_path}"
-        echo [ERROR] Failed to copy new version!
-        pause
-        exit /b 1
+set COPY_OK=0
+for /L %%i in (1,1,45) do (
+    copy /Y "{exe_path}" "{target_exe}" >nul 2>&1
+    if not errorlevel 1 (
+        set COPY_OK=1
+        echo Copy success at attempt %%i >> "{log_path}"
+        goto COPY_DONE
     )
+    echo Copy failed at attempt %%i, waiting... >> "{log_path}"
+    timeout /t 1 /nobreak >nul
+)
+
+:COPY_DONE
+if "%COPY_OK%"=="0" (
+    echo [ERROR] Failed to copy new version after retries! >> "{log_path}"
+    echo [ERROR] Failed to copy new version!
+    pause
+    exit /b 1
 )
 
 echo Copy successful! >> "{log_path}"

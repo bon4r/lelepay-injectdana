@@ -5,6 +5,13 @@ INJECT DANA v3.0 - Auto Suntikan via Telethon + myBCA HP
 =========================================================
 1 Mar 2026
 
+v3.0.23: Update in-place (tanpa file app baru)
+    - File update didownload ke TEMP, bukan folder app
+    - Installer update overwrite EXE yang sedang dipakai (in-place)
+    - Fix sumber changelog dari field 'changelog' VPS jika 'body' kosong
+v3.0.22: Fix restart update lebih stabil
+    - Ganti mekanisme tunggu proses: copy-retry loop sampai file unlock
+    - Hindari false-negative deteksi proses yang bikin restart gagal
 v3.0.21: Fix auto-restart setelah install update
     - Tambah fallback launch setelah update copy (start /D, Start-Process, explorer)
     - Perbaiki reliability restart otomatis pas klik Install sekarang
@@ -173,7 +180,7 @@ except ImportError:
 # ======================================================================
 # CONFIG
 # ======================================================================
-APP_VERSION = "3.0.21"  # Current app version for update check
+APP_VERSION = "3.0.23"  # Current app version for update check
 
 # Subprocess flags to hide terminal windows on Windows
 SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
